@@ -1,0 +1,27 @@
+[project]
+site_name = "ocr_image_to_text"
+site_url = "https://ShaheerIslam1211.github.io/smartocr/"
+repo_url = "https://github.com/ShaheerIslam1211/smartocr"
+repo_name = "ShaheerIslam1211/smartocr"
+
+nav = [
+  { "Home" = "index.md" },
+  { "Installation" = "installation.md" },
+  { "Usage" = "usage.md" },
+  { "API Reference" = "api.md" },
+]
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+toggle.icon = "material/brightness-7"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+toggle.icon = "material/brightness-4"
+toggle.name = "Switch to light mode"
+
+[project.plugins.mkdocstrings.handlers.python]
+paths = ["src"]

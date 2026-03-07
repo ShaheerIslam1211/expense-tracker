@@ -1,0 +1,10 @@
+onlyBuiltDependencies:
+  - '@firebase/util'
+  - core-js
+  - core-js-pure
+  - ejs
+  - es5-ext
+  - esbuild
+  - fsevents
+  - protobufjs
+  - tesseract.js

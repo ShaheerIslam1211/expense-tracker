@@ -1,0 +1,69 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #0f0f12;
+  --surface: #18181c;
+  --surface-hover: #222228;
+  --border: #2d2d35;
+  --text: #f4f4f5;
+  --text-muted: #a1a1aa;
+  --accent: #22c55e;
+  --accent-dim: #16a34a;
+  --fuel: #eab308;
+  --danger: #ef4444;
+  --chart-1: #22c55e;
+  --chart-2: #eab308;
+  --chart-3: #3b82f6;
+  --chart-4: #a855f7;
+  --chart-5: #ec4899;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #fafafa;
+    --surface: #ffffff;
+    --surface-hover: #f4f4f5;
+    --border: #e4e4e7;
+    --text: #18181b;
+    --text-muted: #71717a;
+    --accent: #16a34a;
+    --accent-dim: #15803d;
+    --fuel: #ca8a04;
+    --danger: #dc2626;
+  }
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "DM Sans", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+input, select, textarea, button {
+  font-family: inherit;
+}
+
+/* Prevent iOS zoom on focus (16px+) and better touch targets */
+@media screen and (max-width: 768px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+  button, a[role="button"] {
+    min-height: 44px;
+  }
+}
+
+/* Safe area for mobile notch */
+@supports (padding: env(safe-area-inset-bottom)) {
+  .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+  .safe-top { padding-top: env(safe-area-inset-top); }
+}

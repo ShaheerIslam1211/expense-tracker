@@ -1,0 +1,10 @@
+{
+  "name": "Expense Tracker",
+  "short_name": "Expenses",
+  "description": "Advanced expense & fuel tracking with receipts and insights",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f0f12",
+  "theme_color": "#0f0f12",
+  "orientation": "portrait-primary"
+}
