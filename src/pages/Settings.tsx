@@ -1,475 +1,572 @@
-import { useMemo, useState, useEffect } from 'react'
-import { useBudget } from '../context/BudgetContext'
-import { formatPkr } from '../utils/currency'
-import { useUISettings } from '../context/UISettingsContext'
-import { useCategories } from '../context/CategoryContext'
-import { useExpenses } from '../context/ExpenseContext'
+import { useState, useEffect } from "react";
+import { useBudget } from "../context/BudgetContext";
+import { useCategories } from "../context/CategoryContext";
+import { useAuth } from "../context/AuthContext";
+import { useExpenses } from "../context/ExpenseContext";
+import { useSavings } from "../context/SavingsContext";
+import { useTheme } from "../context/ThemeContext";
+import {
+  User,
+  Settings as SettingsIcon,
+  Palette,
+  Camera,
+  Check,
+  Save,
+  LogOut,
+  Moon,
+  Sun,
+  Monitor,
+  Trash2,
+  Plus,
+  Target,
+  Download,
+} from "lucide-react";
+import { cn } from "../utils/cn";
+import { useCurrency } from "../hooks/useCurrency";
+import type { Expense } from "../types";
 
-const OPENAI_KEY_STORAGE = 'expense-tracker-openai-key'
+const OPENAI_KEY_STORAGE = "expense-tracker-openai-key";
 
 function loadStoredApiKey(): string {
   try {
-    return localStorage.getItem(OPENAI_KEY_STORAGE) ?? ''
+    return localStorage.getItem(OPENAI_KEY_STORAGE) ?? "";
   } catch {
-    return ''
+    return "";
   }
 }
 
 function saveApiKey(key: string) {
   try {
-    if (key.trim()) localStorage.setItem(OPENAI_KEY_STORAGE, key.trim())
-    else localStorage.removeItem(OPENAI_KEY_STORAGE)
+    if (key.trim()) localStorage.setItem(OPENAI_KEY_STORAGE, key.trim());
+    else localStorage.removeItem(OPENAI_KEY_STORAGE);
   } catch {
     // ignore
   }
 }
 
 export default function Settings() {
-  const { monthlyBudget, setMonthlyBudget } = useBudget()
-  const {
-    navPosition,
-    navColor,
-    navFixed,
-    setNavPosition,
-    setNavColor,
-    setNavFixed,
-  } = useUISettings()
-  const [budgetInput, setBudgetInput] = useState(String(monthlyBudget))
-  const [apiKey, setApiKey] = useState(loadStoredApiKey)
-  const [apiKeyVisible, setApiKeyVisible] = useState(false)
-  const [saved, setSaved] = useState(false)
-  const { categories, customCategories, addCategory, updateCategory, deleteCategory } = useCategories()
-  const { expenses } = useExpenses()
-  const [newCategoryName, setNewCategoryName] = useState('')
-  const [newCategoryIcon, setNewCategoryIcon] = useState('🏷️')
-  const [newCategoryColor, setNewCategoryColor] = useState('#64748b')
-  const [savingCategory, setSavingCategory] = useState(false)
-  const [categorySearch, setCategorySearch] = useState('')
-  const [tableSearch, setTableSearch] = useState('')
-  const [tableLimit, setTableLimit] = useState(25)
-  const [editDrafts, setEditDrafts] = useState<Record<string, { name: string; icon: string; color: string }>>({})
+  const { monthlyBudget, setMonthlyBudget } = useBudget();
+  const { userData, updateUserProfile, signOut } = useAuth();
+  const { expenses: allExpenses } = useExpenses();
+  const { theme: currentTheme, actualTheme, setTheme } = useTheme();
+  const [budgetInput, setBudgetInput] = useState(String(monthlyBudget));
+  const [apiKey, setApiKey] = useState(loadStoredApiKey);
+  const [saved, setSaved] = useState(false);
+  const { categories, deleteCategory, addCategory } = useCategories();
+  const { savingsGoals, addSavingsGoal, deleteSavingsGoal } = useSavings();
+
+  // Profile state
+  const [profileName, setProfileName] = useState(userData?.name || "");
+  const [profileBio, setProfileBio] = useState(userData?.bio || "");
+  const [profileCurrency, setProfileCurrency] = useState(userData?.currency || "USD");
+  const [profileTheme, setProfileTheme] = useState(userData?.theme || "system");
+  const [isUpdatingProfile, setIsUpdatingProfile] = useState(false);
+  const { formatAmount } = useCurrency();
+
+  const [activeTab, setActiveTab] = useState<"profile" | "categories" | "system">("profile");
+
+  // New Category state
+  const [newCatName, setNewCatName] = useState("");
+  const [newCatIcon, setNewCatIcon] = useState("💰");
+  const [newCatColor, setNewCatColor] = useState("#6366f1");
+
+  // New Savings Goal state
+  const [newGoalName, setNewGoalName] = useState("");
+  const [newGoalTarget, setNewGoalTarget] = useState("");
+  const [newGoalIcon, setNewGoalIcon] = useState("🎯");
+  const [newGoalColor, setNewGoalColor] = useState("#6366f1");
 
   useEffect(() => {
-    setBudgetInput(String(monthlyBudget))
-  }, [monthlyBudget])
-
-  const handleBudgetBlur = () => {
-    const num = parseInt(budgetInput.replace(/\D/g, ''), 10)
-    if (Number.isFinite(num) && num >= 0) {
-      setMonthlyBudget(num)
-      setBudgetInput(String(num))
-    } else {
-      setBudgetInput(String(monthlyBudget))
+    if (userData) {
+      setProfileName(userData.name);
+      setProfileBio(userData.bio || "");
+      setProfileCurrency(userData.currency || "USD");
+      setProfileTheme(userData.theme || "system");
     }
-  }
+  }, [userData]);
 
-  const handleSaveApiKey = () => {
-    saveApiKey(apiKey)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
-  }
+  // Sync profile theme with current theme
+  useEffect(() => {
+    setProfileTheme(currentTheme);
+  }, [currentTheme]);
 
-  const filteredCategories = useMemo(() => {
-    const q = categorySearch.trim().toLowerCase()
-    if (!q) return categories
-    return categories.filter((c) => c.name.toLowerCase().includes(q) || c.id.toLowerCase().includes(q))
-  }, [categories, categorySearch])
+  useEffect(() => {
+    setBudgetInput(String(monthlyBudget));
+  }, [monthlyBudget]);
 
-  const filteredExpenses = useMemo(() => {
-    const q = tableSearch.trim().toLowerCase()
-    let list = [...expenses]
-    if (q) {
-      list = list.filter((e) => {
-        const blob = [
-          e.id,
-          e.categoryId,
-          e.customCategory,
-          e.note,
-          e.merchant,
-          e.reference,
-          e.amount,
-          e.date,
-          e.createdAt,
-        ]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase()
-        return blob.includes(q)
-      })
+  const handleUpdateProfile = async () => {
+    setIsUpdatingProfile(true);
+    try {
+      await updateUserProfile({
+        name: profileName,
+        bio: profileBio,
+        currency: profileCurrency,
+        theme: profileTheme as "light" | "dark" | "system",
+      });
+      // Also update the theme context to ensure consistency
+      setTheme(profileTheme as "light" | "dark" | "system");
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (error) {
+      console.error("Failed to update profile:", error);
+    } finally {
+      setIsUpdatingProfile(false);
     }
-    return list.slice(0, tableLimit)
-  }, [expenses, tableSearch, tableLimit])
+  };
 
   const handleAddCategory = async () => {
-    if (!newCategoryName.trim()) return
-    setSavingCategory(true)
-    try {
-      await addCategory({
-        name: newCategoryName,
-        icon: newCategoryIcon || '🏷️',
-        color: newCategoryColor,
-      })
-      setNewCategoryName('')
-      setNewCategoryIcon('🏷️')
-      setNewCategoryColor('#64748b')
-    } finally {
-      setSavingCategory(false)
-    }
-  }
+    if (!newCatName.trim()) return;
+    await addCategory({
+      name: newCatName.trim(),
+      icon: newCatIcon,
+      color: newCatColor,
+    });
+    setNewCatName("");
+  };
 
-  const beginEditCategory = (id: string, name: string, icon: string, color: string) => {
-    setEditDrafts((prev) => ({
-      ...prev,
-      [id]: { name, icon, color },
-    }))
-  }
+  const handleAddGoal = async () => {
+    if (!newGoalName.trim() || !newGoalTarget) return;
+    await addSavingsGoal({
+      name: newGoalName.trim(),
+      targetAmount: parseFloat(newGoalTarget),
+      type: "short-term",
+      icon: newGoalIcon,
+      color: newGoalColor,
+      createdAt: new Date().toISOString(),
+    });
+    setNewGoalName("");
+    setNewGoalTarget("");
+  };
 
-  const saveCategoryEdit = async (id: string) => {
-    const draft = editDrafts[id]
-    if (!draft) return
-    await updateCategory(id, draft)
-    setEditDrafts((prev) => {
-      const next = { ...prev }
-      delete next[id]
-      return next
-    })
-  }
+  const handleSaveApiKey = () => {
+    saveApiKey(apiKey);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  const exportToCSV = () => {
+    const headers = ["Date", "Title", "Amount", "Category", "Payment Method"];
+    const rows = allExpenses.map((e: Expense) => [
+      e.date,
+      e.note || e.merchant || "Expense",
+      e.amount,
+      categories.find((c) => c.id === e.categoryId)?.name || e.categoryId,
+      e.paymentMethodType,
+    ]);
+
+    const csvContent = [headers.join(","), ...rows.map((row: (string | number)[]) => row.join(","))].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.setAttribute("href", url);
+    link.setAttribute("download", `expenses-${new Date().toISOString().split("T")[0]}.csv`);
+    link.style.visibility = "hidden";
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const tabs = [
+    { id: "profile", label: "Profile", icon: User },
+    { id: "categories", label: "Categories", icon: SettingsIcon },
+    { id: "system", label: "System", icon: Palette },
+  ];
+
+  const themes = [
+    { id: "light", label: "Light", icon: Sun },
+    { id: "dark", label: "Dark", icon: Moon },
+    { id: "system", label: "System", icon: Monitor },
+  ];
 
   return (
-    <div className="space-y-6 max-w-lg mx-auto">
-      <h2 className="text-xl font-semibold">Settings</h2>
-
-      <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4 space-y-4">
-        <h3 className="font-medium">Monthly budget (PKR)</h3>
-        <p className="text-sm text-[var(--text-muted)]">
-          Default is Rs 60,000. You’ll see how much you’re over or under on the Dashboard.
-        </p>
-        <input
-          type="text"
-          inputMode="numeric"
-          placeholder="60000"
-          value={budgetInput}
-          onChange={(e) => setBudgetInput(e.target.value.replace(/\D/g, ''))}
-          onBlur={handleBudgetBlur}
-          className="w-full px-4 py-3 rounded-xl bg-[var(--bg)] border border-[var(--border)] text-lg"
-          aria-label="Monthly budget in Pakistani Rupees"
-        />
-        <p className="text-sm text-[var(--text-muted)]">
-          Current: {formatPkr(monthlyBudget)}
-        </p>
+    <div className="space-y-8 pb-12">
+      <div>
+        <h1 className="text-4xl font-black tracking-tight text-foreground">Settings</h1>
+        <p className="text-muted-foreground mt-1 font-medium">Customize your SpendWise experience.</p>
       </div>
 
-      <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4 space-y-4">
-        <h3 className="font-medium">Receipt scanning (optional)</h3>
-        <p className="text-sm text-[var(--text-muted)]">
-          Upload a receipt photo on Add expense, then tap “Scan receipt” to extract groceries (Surf, Ketchup, Chicken, etc.) using OCR. No API key needed. For even better results you can add an OpenAI API key below to use AI-powered extraction.
-        </p>
-        <div className="flex gap-2">
-          <input
-            type={apiKeyVisible ? 'text' : 'password'}
-            placeholder="sk-..."
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
-            className="flex-1 px-4 py-3 rounded-xl bg-[var(--bg)] border border-[var(--border)]"
-            aria-label="OpenAI API key (optional)"
-          />
-          <button
-            type="button"
-            onClick={() => setApiKeyVisible((v) => !v)}
-            className="px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--surface-hover)]"
-            aria-label={apiKeyVisible ? 'Hide key' : 'Show key'}
-          >
-            {apiKeyVisible ? '🙈' : '👁'}
-          </button>
-        </div>
-        <button
-          type="button"
-          onClick={handleSaveApiKey}
-          className="px-4 py-2 rounded-xl bg-[var(--accent)] text-white font-medium hover:opacity-90"
-        >
-          {saved ? 'Saved ✓' : 'Save API key'}
-        </button>
-      </div>
+      <div className="flex flex-col md:flex-row gap-8">
+        {/* Settings Sidebar */}
+        <aside className="w-full md:w-64 space-y-2">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id as "profile" | "categories" | "system")}
+              className={cn(
+                "w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all duration-200",
+                activeTab === tab.id
+                  ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
+                  : "text-muted-foreground hover:bg-accent hover:text-foreground",
+              )}
+            >
+              <tab.icon className="h-5 w-5" />
+              {tab.label}
+            </button>
+          ))}
 
-      <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4 space-y-4">
-        <h3 className="font-medium">Navigation & theme</h3>
-        <div className="space-y-3">
-          <div>
-            <p className="text-sm text-[var(--text-muted)] mb-1">Navbar position</p>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <button
-                type="button"
-                onClick={() => setNavPosition('bottom')}
-                className={`flex-1 px-3 py-2 rounded-xl border text-sm text-left ${
-                  navPosition === 'bottom'
-                    ? 'border-[var(--accent)] bg-[var(--accent)]/10'
-                    : 'border-[var(--border)] bg-[var(--bg)]'
-                }`}
-              >
-                Bottom (mobile-style)
-              </button>
-              <button
-                type="button"
-                onClick={() => setNavPosition('top')}
-                className={`flex-1 px-3 py-2 rounded-xl border text-sm text-left ${
-                  navPosition === 'top'
-                    ? 'border-[var(--accent)] bg-[var(--accent)]/10'
-                    : 'border-[var(--border)] bg-[var(--bg)]'
-                }`}
-              >
-                Top (scrolls with page)
-              </button>
-            </div>
+          <div className="pt-4 mt-4 border-t border-border">
+            <button
+              onClick={signOut}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm text-destructive hover:bg-destructive/10 transition-all duration-200"
+            >
+              <LogOut className="h-5 w-5" />
+              Sign Out
+            </button>
           </div>
+        </aside>
 
-          <div>
-            <p className="text-sm text-[var(--text-muted)] mb-1">Navbar behavior (top only)</p>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <button
-                type="button"
-                onClick={() => setNavFixed(true)}
-                className={`flex-1 px-3 py-2 rounded-xl border text-sm text-left ${
-                  navFixed
-                    ? 'border-[var(--accent)] bg-[var(--accent)]/10'
-                    : 'border-[var(--border)] bg-[var(--bg)]'
-                }`}
-              >
-                Fixed (sticks to top)
-              </button>
-              <button
-                type="button"
-                onClick={() => setNavFixed(false)}
-                className={`flex-1 px-3 py-2 rounded-xl border text-sm text-left ${
-                  !navFixed
-                    ? 'border-[var(--accent)] bg-[var(--accent)]/10'
-                    : 'border-[var(--border)] bg-[var(--bg)]'
-                }`}
-              >
-                Scroll with page
-              </button>
-            </div>
-          </div>
+        {/* Settings Content */}
+        <div className="flex-1 space-y-8">
+          {activeTab === "profile" && (
+            <section className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="bg-card border border-border rounded-3xl p-8 shadow-sm space-y-8">
+                <div className="flex flex-col sm:flex-row items-center gap-6">
+                  <div className="relative group">
+                    <div className="w-24 h-24 rounded-full bg-linear-to-tr from-primary to-primary/60 flex items-center justify-center text-3xl font-black text-primary-foreground shadow-xl ring-4 ring-background overflow-hidden">
+                      {userData?.photoUrl ? (
+                        <img
+                          src={userData.photoUrl}
+                          alt="Avatar"
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        userData?.name?.charAt(0) || "U"
+                      )}
+                    </div>
+                    <button className="absolute bottom-0 right-0 p-2 bg-background border border-border rounded-full shadow-lg hover:bg-accent transition-all">
+                      <Camera className="h-4 w-4 text-foreground" />
+                    </button>
+                  </div>
+                  <div className="text-center sm:text-left">
+                    <h3 className="text-xl font-black text-foreground">{userData?.name || "User"}</h3>
+                    <p className="text-sm text-muted-foreground font-medium">{userData?.email}</p>
+                  </div>
+                </div>
 
-          <div>
-            <p className="text-sm text-[var(--text-muted)] mb-1">Navbar color</p>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <button
-                type="button"
-                onClick={() => setNavColor('dark')}
-                className={`flex-1 px-3 py-2 rounded-xl border text-sm text-left ${
-                  navColor === 'dark'
-                    ? 'border-[var(--accent)] bg-[var(--accent)]/10'
-                    : 'border-[var(--border)] bg-[var(--bg)]'
-                }`}
-              >
-                Dark
-              </button>
-              <button
-                type="button"
-                onClick={() => setNavColor('accent')}
-                className={`flex-1 px-3 py-2 rounded-xl border text-sm text-left ${
-                  navColor === 'accent'
-                    ? 'border-[var(--accent)] bg-[var(--accent)]/10'
-                    : 'border-[var(--border)] bg-[var(--bg)]'
-                }`}
-              >
-                Green accent
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-muted-foreground uppercase tracking-widest ml-1">
+                      Full Name
+                    </label>
+                    <input
+                      type="text"
+                      value={profileName}
+                      onChange={(e) => setProfileName(e.target.value)}
+                      className="w-full bg-accent/50 border border-border rounded-xl px-4 py-3 font-bold focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-foreground"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-muted-foreground uppercase tracking-widest ml-1">
+                      Preferred Currency
+                    </label>
+                    <select
+                      value={profileCurrency}
+                      onChange={(e) => setProfileCurrency(e.target.value)}
+                      className="w-full bg-accent/50 border border-border rounded-xl px-4 py-3 font-bold focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-foreground"
+                    >
+                      <option value="USD">USD ($)</option>
+                      <option value="EUR">EUR (€)</option>
+                      <option value="GBP">GBP (£)</option>
+                      <option value="PKR">PKR (₨)</option>
+                    </select>
+                  </div>
+                  <div className="sm:col-span-2 space-y-2">
+                    <label className="text-xs font-black text-muted-foreground uppercase tracking-widest ml-1">
+                      Bio / Note
+                    </label>
+                    <textarea
+                      value={profileBio}
+                      onChange={(e) => setProfileBio(e.target.value)}
+                      rows={3}
+                      className="w-full bg-accent/50 border border-border rounded-xl px-4 py-3 font-bold focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all resize-none text-foreground"
+                      placeholder="Tell us a bit about yourself..."
+                    />
+                  </div>
+                </div>
 
-      <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4 space-y-4">
-        <h3 className="font-medium">Dynamic category manager</h3>
-        <p className="text-sm text-[var(--text-muted)]">
-          Add your own categories (e.g. Groceries, Kids, Business), edit them, and use them across Add/Edit/History.
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
-          <input
-            type="text"
-            placeholder="Category name"
-            value={newCategoryName}
-            onChange={(e) => setNewCategoryName(e.target.value)}
-            className="sm:col-span-2 px-3 py-2 rounded-xl bg-[var(--bg)] border border-[var(--border)]"
-          />
-          <input
-            type="text"
-            placeholder="Icon"
-            value={newCategoryIcon}
-            onChange={(e) => setNewCategoryIcon(e.target.value)}
-            className="px-3 py-2 rounded-xl bg-[var(--bg)] border border-[var(--border)]"
-          />
-          <input
-            type="color"
-            value={newCategoryColor}
-            onChange={(e) => setNewCategoryColor(e.target.value)}
-            className="w-full h-10 px-2 py-1 rounded-xl bg-[var(--bg)] border border-[var(--border)]"
-          />
-        </div>
-        <button
-          type="button"
-          onClick={handleAddCategory}
-          disabled={savingCategory || !newCategoryName.trim()}
-          className="px-4 py-2 rounded-xl bg-[var(--accent)] text-white font-medium disabled:opacity-60"
-        >
-          {savingCategory ? 'Adding...' : 'Add category'}
-        </button>
+                <div className="space-y-4">
+                  <label className="text-xs font-black text-muted-foreground uppercase tracking-widest ml-1">
+                    Appearance
+                  </label>
+                  <div className="grid grid-cols-3 gap-4">
+                    {themes.map((t) => (
+                      <button
+                        key={t.id}
+                        onClick={() => {
+                          const newTheme = t.id as "light" | "dark" | "system";
+                          setProfileTheme(newTheme);
+                          setTheme(newTheme);
+                        }}
+                        className={cn(
+                          "flex flex-col items-center gap-2 p-4 rounded-2xl border transition-all",
+                          profileTheme === t.id
+                            ? "bg-primary/10 border-primary text-primary shadow-sm"
+                            : "bg-accent/30 border-border text-muted-foreground hover:border-muted-foreground/30",
+                        )}
+                      >
+                        <t.icon className="h-6 w-6" />
+                        <span className="text-xs font-black uppercase tracking-tighter">{t.label}</span>
+                        {profileTheme === t.id && <div className="w-2 h-2 bg-primary rounded-full mt-1"></div>}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-muted-foreground text-center mt-2">
+                    Current:{" "}
+                    {currentTheme === "light"
+                      ? "Light"
+                      : currentTheme === "dark"
+                        ? "Dark"
+                        : "System (" + (actualTheme === "light" ? "Light" : "Dark") + ")"}
+                  </p>
+                </div>
 
-        <input
-          type="search"
-          placeholder="Search categories..."
-          value={categorySearch}
-          onChange={(e) => setCategorySearch(e.target.value)}
-          className="w-full px-3 py-2 rounded-xl bg-[var(--bg)] border border-[var(--border)]"
-        />
+                <div className="flex justify-end">
+                  <button
+                    onClick={handleUpdateProfile}
+                    disabled={isUpdatingProfile}
+                    className="flex items-center gap-2 bg-primary text-primary-foreground px-6 py-3 rounded-xl font-black shadow-lg shadow-primary/20 hover:scale-105 transition-all disabled:opacity-50"
+                  >
+                    {saved ? <Check className="h-5 w-5" /> : <Save className="h-5 w-5" />}
+                    {saved ? "Saved!" : "Save Changes"}
+                  </button>
+                </div>
+              </div>
+            </section>
+          )}
 
-        <div className="space-y-2 max-h-80 overflow-auto">
-          {filteredCategories.map((cat) => {
-            const isCustom = customCategories.some((c) => c.id === cat.id)
-            const draft = editDrafts[cat.id]
-            return (
-              <div key={cat.id} className="rounded-xl border border-[var(--border)] bg-[var(--bg)] p-3">
-                <div className="grid grid-cols-1 sm:grid-cols-6 gap-2 items-center">
+          {activeTab === "system" && (
+            <section className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="bg-card border border-border rounded-3xl p-8 shadow-sm space-y-6">
+                <h3 className="text-xl font-black flex items-center gap-2 text-foreground">
+                  <Palette className="h-6 w-6 text-primary" /> App Configuration
+                </h3>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-black text-muted-foreground uppercase tracking-widest ml-1">
+                    Monthly Budget ({profileCurrency})
+                  </label>
                   <input
-                    type="text"
-                    value={draft?.name ?? cat.name}
-                    disabled={!isCustom}
-                    onChange={(e) =>
-                      setEditDrafts((prev) => ({
-                        ...prev,
-                        [cat.id]: {
-                          name: e.target.value,
-                          icon: draft?.icon ?? cat.icon,
-                          color: draft?.color ?? cat.color,
-                        },
-                      }))
-                    }
-                    className="sm:col-span-2 px-2 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] disabled:opacity-70"
+                    type="number"
+                    value={budgetInput}
+                    onChange={(e) => setBudgetInput(e.target.value)}
+                    onBlur={() => setMonthlyBudget(parseInt(budgetInput) || 0)}
+                    className="w-full bg-accent/50 border border-border rounded-xl px-4 py-3 font-bold focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-foreground"
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-black text-muted-foreground uppercase tracking-widest ml-1">
+                    OpenAI API Key (Optional)
+                  </label>
                   <input
-                    type="text"
-                    value={draft?.icon ?? cat.icon}
-                    disabled={!isCustom}
-                    onChange={(e) =>
-                      setEditDrafts((prev) => ({
-                        ...prev,
-                        [cat.id]: {
-                          name: draft?.name ?? cat.name,
-                          icon: e.target.value,
-                          color: draft?.color ?? cat.color,
-                        },
-                      }))
-                    }
-                    className="px-2 py-1.5 rounded-lg border border-[var(--border)] bg-[var(--surface)] disabled:opacity-70"
+                    type="password"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    className="w-full bg-accent/50 border border-border rounded-xl px-4 py-3 font-bold focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-foreground"
+                    placeholder="sk-..."
                   />
-                  <input
-                    type="color"
-                    value={draft?.color ?? cat.color}
-                    disabled={!isCustom}
-                    onChange={(e) =>
-                      setEditDrafts((prev) => ({
-                        ...prev,
-                        [cat.id]: {
-                          name: draft?.name ?? cat.name,
-                          icon: draft?.icon ?? cat.icon,
-                          color: e.target.value,
-                        },
-                      }))
-                    }
-                    className="h-9 rounded-lg border border-[var(--border)] bg-[var(--surface)] disabled:opacity-70"
-                  />
-                  <div className="text-xs text-[var(--text-muted)]">{cat.id}</div>
-                  <div className="flex gap-2 justify-end">
-                    {isCustom && (
-                      <>
+                  <p className="text-[10px] text-muted-foreground font-medium px-1">
+                    Used for smart receipt scanning and AI insights.
+                  </p>
+                </div>
+
+                <div className="flex justify-end pt-4 gap-4">
+                  <button
+                    onClick={exportToCSV}
+                    className="flex items-center gap-2 bg-accent/30 text-foreground px-6 py-3 rounded-xl font-black border border-border hover:bg-accent/50 transition-all"
+                  >
+                    <Download className="h-5 w-5" />
+                    Export CSV
+                  </button>
+                  <button
+                    onClick={handleSaveApiKey}
+                    className="flex items-center gap-2 bg-primary text-primary-foreground px-6 py-3 rounded-xl font-black shadow-lg shadow-primary/20 hover:scale-105 transition-all"
+                  >
+                    {saved ? <Check className="h-5 w-5" /> : <Save className="h-5 w-5" />}
+                    Save Config
+                  </button>
+                </div>
+
+                <div className="pt-8 border-t border-border space-y-6">
+                  <h3 className="text-xl font-black flex items-center gap-2 text-foreground">
+                    <Target className="h-6 w-6 text-primary" /> Savings Goals
+                  </h3>
+
+                  {/* Add New Goal */}
+                  <div className="bg-accent/20 rounded-2xl p-6 border border-border/50">
+                    <p className="text-xs font-black text-muted-foreground uppercase tracking-widest mb-4">
+                      Create New Goal
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                      <input
+                        type="text"
+                        value={newGoalName}
+                        onChange={(e) => setNewGoalName(e.target.value)}
+                        placeholder="Goal Name (e.g. New Car)"
+                        className="sm:col-span-2 bg-background border border-border rounded-xl px-4 py-2 font-bold text-sm"
+                      />
+                      <input
+                        type="number"
+                        value={newGoalTarget}
+                        onChange={(e) => setNewGoalTarget(e.target.value)}
+                        placeholder="Target Amount"
+                        className="bg-background border border-border rounded-xl px-4 py-2 font-bold text-sm"
+                      />
+                      <button
+                        onClick={handleAddGoal}
+                        className="bg-primary text-primary-foreground rounded-xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-all flex items-center justify-center gap-2"
+                      >
+                        <Plus className="h-4 w-4" /> Create
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4 mt-4">
+                      <div className="flex items-center gap-3">
+                        <label className="text-[10px] font-black text-muted-foreground uppercase">Icon</label>
+                        <input
+                          type="text"
+                          value={newGoalIcon}
+                          onChange={(e) => setNewGoalIcon(e.target.value)}
+                          className="w-10 bg-background border border-border rounded-lg px-2 py-1 text-center"
+                        />
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <label className="text-[10px] font-black text-muted-foreground uppercase">Color</label>
+                        <input
+                          type="color"
+                          value={newGoalColor}
+                          onChange={(e) => setNewGoalColor(e.target.value)}
+                          className="flex-1 h-8 p-1 bg-background border border-border rounded-lg cursor-pointer"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Goals List */}
+                  <div className="grid grid-cols-1 gap-4">
+                    {(savingsGoals ?? []).map((goal) => (
+                      <div
+                        key={goal.id}
+                        className="flex items-center justify-between p-4 bg-accent/30 rounded-2xl border border-border group hover:border-primary/30 transition-all"
+                      >
+                        <div className="flex items-center gap-4 flex-1">
+                          <div
+                            className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl shadow-sm"
+                            style={{ backgroundColor: goal.color + "20" }}
+                          >
+                            {goal.icon}
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex justify-between mb-1">
+                              <p className="font-bold text-sm text-foreground">{goal.name}</p>
+                              <p className="text-xs font-black text-muted-foreground">
+                                {formatAmount(goal.currentAmount)} / {formatAmount(goal.targetAmount)}
+                              </p>
+                            </div>
+                            <div className="h-1.5 bg-background rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-primary transition-all duration-1000"
+                                style={{
+                                  width: `${Math.min((goal.currentAmount / goal.targetAmount) * 100, 100)}%`,
+                                  backgroundColor: goal.color,
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </div>
                         <button
-                          type="button"
-                          onClick={() => {
-                            if (!draft) beginEditCategory(cat.id, cat.name, cat.icon, cat.color)
-                            else void saveCategoryEdit(cat.id)
-                          }}
-                          className="px-2 py-1 rounded-lg border border-[var(--border)]"
+                          onClick={() => deleteSavingsGoal(goal.id)}
+                          className="ml-4 p-2 text-destructive hover:bg-destructive/10 rounded-lg transition-all opacity-0 group-hover:opacity-100"
                         >
-                          {draft ? 'Save' : 'Edit'}
+                          <Trash2 className="h-4 w-4" />
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (!window.confirm(`Delete category "${cat.name}"?`)) return
-                            void deleteCategory(cat.id)
-                          }}
-                          className="px-2 py-1 rounded-lg border border-[var(--danger)] text-[var(--danger)]"
-                        >
-                          Delete
-                        </button>
-                      </>
-                    )}
-                    {!isCustom && <span className="text-xs text-[var(--text-muted)]">System</span>}
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
-            )
-          })}
-        </div>
-      </div>
+            </section>
+          )}
 
-      <div className="rounded-2xl bg-[var(--surface)] border border-[var(--border)] p-4 space-y-4">
-        <h3 className="font-medium">Firebase data explorer</h3>
-        <p className="text-sm text-[var(--text-muted)]">
-          View your expense records in table format with all key columns from Firestore.
-        </p>
-        <div className="flex flex-col sm:flex-row gap-2">
-          <input
-            type="search"
-            placeholder="Search rows..."
-            value={tableSearch}
-            onChange={(e) => setTableSearch(e.target.value)}
-            className="flex-1 px-3 py-2 rounded-xl bg-[var(--bg)] border border-[var(--border)]"
-          />
-          <select
-            value={tableLimit}
-            onChange={(e) => setTableLimit(Number(e.target.value))}
-            className="px-3 py-2 rounded-xl bg-[var(--bg)] border border-[var(--border)]"
-          >
-            <option value={25}>25 rows</option>
-            <option value={50}>50 rows</option>
-            <option value={100}>100 rows</option>
-            <option value={200}>200 rows</option>
-          </select>
+          {activeTab === "categories" && (
+            <section className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="bg-card border border-border rounded-3xl p-8 shadow-sm">
+                <h3 className="text-xl font-black flex items-center gap-2 mb-6 text-foreground">
+                  <SettingsIcon className="h-6 w-6 text-primary" /> Manage Categories
+                </h3>
+
+                {/* Add New Category */}
+                <div className="bg-accent/20 rounded-2xl p-6 mb-8 border border-border/50">
+                  <p className="text-xs font-black text-muted-foreground uppercase tracking-widest mb-4">
+                    Add New Category
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                    <input
+                      type="text"
+                      value={newCatName}
+                      onChange={(e) => setNewCatName(e.target.value)}
+                      placeholder="Category Name"
+                      className="sm:col-span-2 bg-background border border-border rounded-xl px-4 py-2 font-bold text-sm"
+                    />
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={newCatIcon}
+                        onChange={(e) => setNewCatIcon(e.target.value)}
+                        className="w-12 bg-background border border-border rounded-xl px-2 py-2 text-center"
+                      />
+                      <input
+                        type="color"
+                        value={newCatColor}
+                        onChange={(e) => setNewCatColor(e.target.value)}
+                        className="flex-1 h-10 p-1 bg-background border border-border rounded-xl cursor-pointer"
+                      />
+                    </div>
+                    <button
+                      onClick={handleAddCategory}
+                      className="bg-primary text-primary-foreground rounded-xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-all flex items-center justify-center gap-2"
+                    >
+                      <Plus className="h-4 w-4" /> Add
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {categories.map((c) => (
+                    <div
+                      key={c.id}
+                      className="flex items-center justify-between p-4 bg-accent/30 rounded-2xl border border-border group hover:border-primary/30 transition-all"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl shadow-sm"
+                          style={{ backgroundColor: c.color + "20" }}
+                        >
+                          {c.icon}
+                        </div>
+                        <div>
+                          <p className="font-bold text-sm text-foreground">{c.name}</p>
+                          <p className="text-[10px] text-muted-foreground uppercase font-black tracking-tighter">
+                            {c.isSystem ? "System Category" : "Custom Category"}
+                          </p>
+                        </div>
+                      </div>
+                      {!c.isSystem && (
+                        <button
+                          onClick={() => deleteCategory(c.id)}
+                          className="opacity-0 group-hover:opacity-100 p-2 text-destructive hover:bg-destructive/10 rounded-lg transition-all"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+          )}
         </div>
-        <div className="overflow-auto border border-[var(--border)] rounded-xl">
-          <table className="min-w-[1100px] w-full text-sm">
-            <thead className="bg-[var(--surface-hover)]">
-              <tr>
-                {['ID', 'Date', 'Amount', 'Category', 'Custom Category', 'Merchant', 'Reference', 'Note', 'Created At'].map((h) => (
-                  <th key={h} className="text-left px-3 py-2 border-b border-[var(--border)]">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filteredExpenses.map((e) => (
-                <tr key={e.id} className="border-b border-[var(--border)]">
-                  <td className="px-3 py-2">{e.id}</td>
-                  <td className="px-3 py-2">{e.date?.slice(0, 10)}</td>
-                  <td className="px-3 py-2">{e.amount}</td>
-                  <td className="px-3 py-2">{e.categoryId}</td>
-                  <td className="px-3 py-2">{e.customCategory ?? ''}</td>
-                  <td className="px-3 py-2">{e.merchant ?? ''}</td>
-                  <td className="px-3 py-2">{e.reference ?? ''}</td>
-                  <td className="px-3 py-2 max-w-[380px] truncate">{e.note}</td>
-                  <td className="px-3 py-2">{e.createdAt?.slice(0, 19).replace('T', ' ')}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <p className="text-xs text-[var(--text-muted)]">
-          Showing {filteredExpenses.length} of {expenses.length} rows.
-        </p>
       </div>
     </div>
-  )
+  );
 }

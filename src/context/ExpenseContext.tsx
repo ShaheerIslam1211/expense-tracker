@@ -1,18 +1,20 @@
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { v4 as uuidv4 } from "uuid";
 import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from 'react'
-import { v4 as uuidv4 } from 'uuid'
-import { startOfMonth, endOfMonth, isWithinInterval, parseISO } from 'date-fns'
-import type { Expense, CategoryId, MonthlySummary } from '../types'
-import { db } from '../firebase'
+  startOfMonth,
+  endOfMonth,
+  isWithinInterval,
+  parseISO,
+  addDays,
+  addWeeks,
+  addMonths,
+  addYears,
+  isBefore,
+  format,
+} from "date-fns";
+import type { Expense, CategoryId, MonthlySummary } from "../types";
+import { db } from "../firebase";
 import {
-  addDoc,
   collection,
   deleteDoc,
   deleteField,
@@ -20,179 +22,319 @@ import {
   onSnapshot,
   orderBy,
   query,
+  setDoc,
   updateDoc,
-} from 'firebase/firestore'
-import { useAuth } from './AuthContext'
-import { useCategories } from './CategoryContext'
+} from "firebase/firestore";
+import { useAuth } from "./AuthContext";
 
 interface ExpenseContextValue {
-  expenses: Expense[]
-  addExpense: (expense: Omit<Expense, 'id' | 'createdAt'>) => void
-  updateExpense: (id: string, updates: Partial<Expense>) => void
-  deleteExpense: (id: string) => void
-  getExpensesByMonth: (year: number, month: number) => Expense[]
-  getMonthlySummaries: (year: number) => MonthlySummary[]
-  getCategoryTotal: (year: number, month: number, categoryId: CategoryId) => number
-  getFuelExpenses: (year?: number, month?: number) => Expense[]
-  totalSpent: (year?: number, month?: number) => number
+  expenses: Expense[];
+  addExpense: (expense: Omit<Expense, "id" | "createdAt">) => Promise<void>;
+  updateExpense: (id: string, updates: Partial<Expense>) => Promise<void>;
+  deleteExpense: (id: string) => Promise<void>;
+  getExpensesByMonth: (year: number, month: number) => Expense[];
+  getMonthlySummaries: (year: number) => MonthlySummary[];
+  getCategoryTotal: (year: number, month: number, categoryId: CategoryId) => number;
+  getFuelExpenses: (year?: number, month?: number) => Expense[];
+  totalSpent: (year?: number, month?: number) => number;
+  totalIncome: (year?: number, month?: number) => number;
+  getBalances: () => { cash: number; cards: Record<string, number> };
 }
 
-const ExpenseContext = createContext<ExpenseContextValue | null>(null)
+const ExpenseContext = createContext<ExpenseContextValue | null>(null);
+
+function stripUndefinedDeep<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map((item) => stripUndefinedDeep(item)) as T;
+  }
+
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, v]) => v !== undefined)
+      .map(([k, v]) => [k, stripUndefinedDeep(v)]);
+    return Object.fromEntries(entries) as T;
+  }
+
+  return value;
+}
 
 export function ExpenseProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth()
-  const { categories } = useCategories()
-  const [expenses, setExpenses] = useState<Expense[]>([])
+  const { user } = useAuth();
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+
+  // Process recurring transactions
+  const processRecurringTransactions = useCallback(
+    async (currentExpenses: Expense[]) => {
+      if (!user) return;
+      const now = new Date();
+
+      for (const expense of currentExpenses) {
+        if (expense.recurring?.isRecurring && expense.recurring.nextOccurrenceDate) {
+          let nextDate = parseISO(expense.recurring.nextOccurrenceDate);
+
+          // If the next occurrence is in the past or today, create a new transaction
+          while (isBefore(nextDate, now) || format(nextDate, "yyyy-MM-dd") === format(now, "yyyy-MM-dd")) {
+            // Create new transaction based on the recurring one
+            const newId = uuidv4();
+            const { recurring: _recurring, ...baseExpense } = expense;
+            const newExpense: Expense = {
+              ...baseExpense,
+              id: newId,
+              date: expense.recurring.nextOccurrenceDate,
+              createdAt: new Date().toISOString(),
+            };
+
+            // Add the new transaction instance
+            await setDoc(doc(db, "users", user.uid, "expenses", newId), stripUndefinedDeep(newExpense));
+
+            // Calculate next occurrence date
+            let updatedNextDate: Date;
+            switch (expense.recurring.frequency) {
+              case "daily":
+                updatedNextDate = addDays(nextDate, 1);
+                break;
+              case "weekly":
+                updatedNextDate = addWeeks(nextDate, 1);
+                break;
+              case "monthly":
+                updatedNextDate = addMonths(nextDate, 1);
+                break;
+              case "yearly":
+                updatedNextDate = addYears(nextDate, 1);
+                break;
+              default:
+                updatedNextDate = addMonths(nextDate, 1);
+            }
+
+            // Update the original recurring template with the new nextOccurrenceDate
+            const nextOccurrenceStr = updatedNextDate.toISOString();
+            await updateDoc(doc(db, "users", user.uid, "expenses", expense.id), {
+              "recurring.nextOccurrenceDate": nextOccurrenceStr,
+              "recurring.lastProcessedDate": new Date().toISOString(),
+            });
+
+            nextDate = updatedNextDate;
+
+            // Break if we've reached an end date
+            if (expense.recurring.endDate && isBefore(parseISO(expense.recurring.endDate), nextDate)) {
+              break;
+            }
+          }
+        }
+      }
+    },
+    [user],
+  );
 
   useEffect(() => {
     if (!user) {
-      setExpenses([])
-      return
+      if (expenses.length > 0) setExpenses([]);
+      return;
     }
-    const q = query(
-      collection(db, 'users', user.uid, 'expenses'),
-      orderBy('date', 'desc')
-    )
+    const q = query(collection(db, "users", user.uid, "expenses"), orderBy("date", "desc"));
     const unsub = onSnapshot(q, (snap) => {
       const next: Expense[] = snap.docs.map((d) => {
-        const data = d.data() as Omit<Expense, 'id'>
+        const data = d.data() as Partial<Expense>;
+        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(d.id);
+        const expenseId = isUUID ? d.id : data.id || d.id;
+
         return {
-          id: d.id,
           ...data,
-        }
-      })
-      setExpenses(next)
-    })
-    return () => unsub()
-  }, [user])
+          id: expenseId,
+          type: data.type || "expense", // Default to expense for legacy data
+        } as Expense;
+      });
+      setExpenses(next);
+
+      // Process recurring transactions whenever expenses are updated
+      processRecurringTransactions(next);
+    });
+    return () => unsub();
+  }, [user, processRecurringTransactions]);
 
   const addExpense = useCallback(
-    (expense: Omit<Expense, 'id' | 'createdAt'>) => {
-      if (!user) return
+    async (expense: Omit<Expense, "id" | "createdAt">) => {
+      if (!user) return;
+      const expenseId = uuidv4();
       const newExpense: Expense = {
         ...expense,
-        id: uuidv4(),
+        id: expenseId,
         createdAt: new Date().toISOString(),
+      };
+      const clean = stripUndefinedDeep(newExpense);
+      try {
+        await setDoc(doc(db, "users", user.uid, "expenses", expenseId), clean);
+      } catch (error) {
+        console.error("Failed to add expense:", error);
+        throw error;
       }
-      const clean = Object.fromEntries(
-        Object.entries(newExpense).filter(([, v]) => v !== undefined)
-      ) as Expense
-      void addDoc(collection(db, 'users', user.uid, 'expenses'), clean)
     },
-    [user]
-  )
+    [user],
+  );
 
   const updateExpense = useCallback(
-    (id: string, updates: Partial<Expense>) => {
-      if (!user) return
-      const ref = doc(db, 'users', user.uid, 'expenses', id)
-      const clean: Record<string, unknown> = {}
+    async (id: string, updates: Partial<Expense>) => {
+      if (!user) return;
+
+      const ref = doc(db, "users", user.uid, "expenses", id);
+      const clean: Record<string, unknown> = {};
       for (const [k, v] of Object.entries(updates)) {
-        if (v === undefined) clean[k] = deleteField()
-        else clean[k] = v
+        if (v === undefined) clean[k] = deleteField();
+        else clean[k] = stripUndefinedDeep(v);
       }
-      void updateDoc(ref, clean)
+
+      try {
+        await updateDoc(ref, clean);
+      } catch (error) {
+        console.error("Failed to update expense:", error);
+        throw error;
+      }
     },
-    [user]
-  )
+    [user],
+  );
 
   const deleteExpense = useCallback(
-    (id: string) => {
-      if (!user) return
-      const ref = doc(db, 'users', user.uid, 'expenses', id)
-      void deleteDoc(ref)
+    async (id: string) => {
+      if (!user) return;
+      const ref = doc(db, "users", user.uid, "expenses", id);
+      try {
+        await deleteDoc(ref);
+      } catch (error) {
+        console.error("Failed to delete expense:", error);
+        throw error;
+      }
     },
-    [user]
-  )
+    [user],
+  );
 
   const getExpensesByMonth = useCallback(
     (year: number, month: number) => {
-      const start = startOfMonth(new Date(year, month - 1))
-      const end = endOfMonth(start)
+      const start = startOfMonth(new Date(year, month - 1));
+      const end = endOfMonth(start);
       return expenses.filter((e) => {
-        const d = parseISO(e.date)
-        return isWithinInterval(d, { start, end })
-      })
+        const d = parseISO(e.date);
+        return isWithinInterval(d, { start, end });
+      });
     },
-    [expenses]
-  )
+    [expenses],
+  );
 
   const getMonthlySummaries = useCallback(
     (year: number): MonthlySummary[] => {
-      const result: MonthlySummary[] = []
+      const summaries: MonthlySummary[] = [];
       for (let month = 1; month <= 12; month++) {
-        const list = getExpensesByMonth(year, month)
-        const total = list.reduce((s, e) => s + e.amount, 0)
-        const byCategory = categories.reduce(
-          (acc, c) => {
-            acc[c.id] = list
-              .filter((e) => e.categoryId === c.id)
-              .reduce((s, e) => s + e.amount, 0)
-            return acc
-          }, {} as Record<string, number>
-        )
-        const fuelTotal = list
-          .filter((e) => e.categoryId === 'fuel')
-          .reduce((s, e) => s + e.amount, 0)
-        result.push({
+        const monthExpenses = getExpensesByMonth(year, month);
+        if (monthExpenses.length === 0) continue;
+
+        const byCategory: Record<string, number> = {};
+        let fuelTotal = 0;
+        let cashTotal = 0;
+        let cardTotal = 0;
+        let total = 0;
+
+        monthExpenses.forEach((e) => {
+          const amount = e.type === "income" ? e.amount : -e.amount;
+          total += amount;
+
+          if (e.type === "expense") {
+            byCategory[e.categoryId] = (byCategory[e.categoryId] || 0) + e.amount;
+            if (e.categoryId === "fuel") fuelTotal += e.amount;
+            if (e.paymentMethodType === "cash") cashTotal += e.amount;
+            else cardTotal += e.amount;
+          } else {
+            // Income handling
+            if (e.paymentMethodType === "cash") cashTotal += e.amount;
+            else cardTotal += e.amount;
+          }
+        });
+
+        summaries.push({
           year,
           month,
           total,
           byCategory,
-          expenseCount: list.length,
+          expenseCount: monthExpenses.filter((e) => e.type === "expense").length,
           fuelTotal: fuelTotal || undefined,
-        })
+          cashTotal,
+          cardTotal,
+        });
       }
-      return result
+      return summaries;
     },
-    [getExpensesByMonth, categories]
-  )
+    [getExpensesByMonth],
+  );
 
   const getCategoryTotal = useCallback(
     (year: number, month: number, categoryId: CategoryId) => {
       return getExpensesByMonth(year, month)
-        .filter((e) => e.categoryId === categoryId)
-        .reduce((s, e) => s + e.amount, 0)
+        .filter((e) => e.categoryId === categoryId && e.type === "expense")
+        .reduce((s, e) => s + e.amount, 0);
     },
-    [getExpensesByMonth]
-  )
+    [getExpensesByMonth],
+  );
 
   const getFuelExpenses = useCallback(
     (year?: number, month?: number) => {
-      let list = expenses.filter((e) => e.categoryId === 'fuel')
+      let list = expenses.filter((e) => e.categoryId === "fuel" && e.type === "expense");
       if (year != null) {
         list = list.filter((e) => {
-          const d = parseISO(e.date)
-          return d.getFullYear() === year
-        })
+          const d = parseISO(e.date);
+          return d.getFullYear() === year;
+        });
         if (month != null) {
-          list = list.filter((e) => parseISO(e.date).getMonth() + 1 === month)
+          list = list.filter((e) => parseISO(e.date).getMonth() + 1 === month);
         }
       }
-      return list.sort(
-        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-      )
+      return list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     },
-    [expenses]
-  )
+    [expenses],
+  );
 
   const totalSpent = useCallback(
     (year?: number, month?: number) => {
-      let list = expenses
+      let list = expenses.filter((e) => e.type === "expense");
       if (year != null) {
-        list = list.filter((e) => parseISO(e.date).getFullYear() === year)
+        list = list.filter((e) => parseISO(e.date).getFullYear() === year);
         if (month != null) {
-          list = list.filter(
-            (e) => parseISO(e.date).getMonth() + 1 === month
-          )
+          list = list.filter((e) => parseISO(e.date).getMonth() + 1 === month);
         }
       }
-      return list.reduce((s, e) => s + e.amount, 0)
+      return list.reduce((s, e) => s + e.amount, 0);
     },
-    [expenses]
-  )
+    [expenses],
+  );
 
-  const value = useMemo(
+  const totalIncome = useCallback(
+    (year?: number, month?: number) => {
+      let list = expenses.filter((e) => e.type === "income");
+      if (year != null) {
+        list = list.filter((e) => parseISO(e.date).getFullYear() === year);
+        if (month != null) {
+          list = list.filter((e) => parseISO(e.date).getMonth() + 1 === month);
+        }
+      }
+      return list.reduce((s, e) => s + e.amount, 0);
+    },
+    [expenses],
+  );
+
+  const getBalances = useCallback(() => {
+    let cash = 0;
+    const cards: Record<string, number> = {};
+
+    expenses.forEach((e) => {
+      const amount = e.type === "income" ? e.amount : -e.amount;
+      if (e.paymentMethodType === "cash") {
+        cash += amount;
+      } else if (e.paymentMethodId) {
+        cards[e.paymentMethodId] = (cards[e.paymentMethodId] || 0) + amount;
+      }
+    });
+
+    return { cash, cards };
+  }, [expenses]);
+
+  const value: ExpenseContextValue = useMemo(
     () => ({
       expenses,
       addExpense,
@@ -203,6 +345,8 @@ export function ExpenseProvider({ children }: { children: ReactNode }) {
       getCategoryTotal,
       getFuelExpenses,
       totalSpent,
+      totalIncome,
+      getBalances,
     }),
     [
       expenses,
@@ -214,18 +358,16 @@ export function ExpenseProvider({ children }: { children: ReactNode }) {
       getCategoryTotal,
       getFuelExpenses,
       totalSpent,
-    ]
-  )
+      totalIncome,
+      getBalances,
+    ],
+  );
 
-  return (
-    <ExpenseContext.Provider value={value}>
-      {children}
-    </ExpenseContext.Provider>
-  )
+  return <ExpenseContext.Provider value={value}>{children}</ExpenseContext.Provider>;
 }
 
 export function useExpenses() {
-  const ctx = useContext(ExpenseContext)
-  if (!ctx) throw new Error('useExpenses must be used within ExpenseProvider')
-  return ctx
+  const ctx = useContext(ExpenseContext);
+  if (!ctx) throw new Error("useExpenses must be used within ExpenseProvider");
+  return ctx;
 }

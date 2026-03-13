@@ -1,35 +1,76 @@
 @import "tailwindcss";
 
+@theme {
+  --color-primary: var(--accent);
+  --color-primary-foreground: #ffffff;
+  --color-background: var(--bg);
+  --color-foreground: var(--text);
+  --color-muted: var(--text-muted);
+  --color-muted-foreground: var(--text-muted);
+  --color-accent: var(--surface-hover);
+  --color-accent-foreground: var(--text);
+  --color-card: var(--surface);
+  --color-card-foreground: var(--text);
+  --color-border: var(--border);
+  --color-input: var(--border);
+  --color-ring: var(--accent);
+  
+  --radius-xl: 1rem;
+  --radius-2xl: 1.5rem;
+  --radius-3xl: 2rem;
+}
+
 :root {
-  --bg: #0f0f12;
-  --surface: #18181c;
-  --surface-hover: #222228;
-  --border: #2d2d35;
-  --text: #f4f4f5;
+  --bg: #09090b;
+  --surface: #121215;
+  --surface-hover: #1c1c21;
+  --border: #27272a;
+  --text: #fafafa;
   --text-muted: #a1a1aa;
-  --accent: #22c55e;
-  --accent-dim: #16a34a;
-  --fuel: #eab308;
+  --accent: #6366f1;
+  --accent-dim: #4f46e5;
+  --success: #10b981;
+  --warning: #f59e0b;
   --danger: #ef4444;
-  --chart-1: #22c55e;
-  --chart-2: #eab308;
-  --chart-3: #3b82f6;
-  --chart-4: #a855f7;
-  --chart-5: #ec4899;
+  --fuel: #eab308;
+  
+  --font-sans: "Inter Variable", "Inter", system-ui, sans-serif;
+}
+
+/* Explicit light mode overrides */
+:root.light {
+  --bg: #fafafa;
+  --surface: #ffffff;
+  --surface-hover: #f4f4f5;
+  --border: #e4e4e7;
+  --text: #09090b;
+  --text-muted: #71717a;
+  --accent: #4f46e5;
+  --accent-dim: #4338ca;
+}
+
+/* Dark mode overrides (for system dark or manual dark) */
+:root.dark {
+  --bg: #09090b;
+  --surface: #121215;
+  --surface-hover: #1c1c21;
+  --border: #27272a;
+  --text: #fafafa;
+  --text-muted: #a1a1aa;
+  --accent: #6366f1;
+  --accent-dim: #4f46e5;
 }
 
 @media (prefers-color-scheme: light) {
-  :root {
+  :root:not(.dark) {
     --bg: #fafafa;
     --surface: #ffffff;
     --surface-hover: #f4f4f5;
     --border: #e4e4e7;
-    --text: #18181b;
+    --text: #09090b;
     --text-muted: #71717a;
-    --accent: #16a34a;
-    --accent-dim: #15803d;
-    --fuel: #ca8a04;
-    --danger: #dc2626;
+    --accent: #4f46e5;
+    --accent-dim: #4338ca;
   }
 }
 
@@ -38,32 +79,84 @@ body {
   min-height: 100vh;
   background: var(--bg);
   color: var(--text);
-  font-family: "DM Sans", system-ui, sans-serif;
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
+  letter-spacing: -0.01em;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Glassmorphism */
+.glass {
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.light .glass {
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Animations */
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-in {
+  animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 #root {
   min-height: 100vh;
 }
 
-input, select, textarea, button {
-  font-family: inherit;
+/* Smooth transitions for all interactive elements */
+button, a, input, select, textarea {
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Prevent iOS zoom on focus (16px+) and better touch targets */
-@media screen and (max-width: 768px) {
-  input, select, textarea {
-    font-size: 16px !important;
-  }
-  button, a[role="button"] {
-    min-height: 44px;
-  }
+/* Theme transition for all elements that change with theme */
+* {
+  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;
 }
 
-/* Safe area for mobile notch */
-@supports (padding: env(safe-area-inset-bottom)) {
-  .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
-  .safe-top { padding-top: env(safe-area-inset-top); }
+/* Safe Area Insets for Mobile PWA */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.safe-top {
+  padding-top: env(safe-area-inset-top);
 }

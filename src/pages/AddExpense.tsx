@@ -4,8 +4,10 @@ import { format } from "date-fns";
 import { XlviLoader } from "react-awesome-loaders";
 import { useExpenses } from "../context/ExpenseContext";
 import { useCategories } from "../context/CategoryContext";
-import { type CategoryId, type FuelInfo } from "../types";
-import { formatPkr } from "../utils/currency";
+import { useCards } from "../context/CardContext";
+import { useToast } from "../context/ToastContext";
+import { type CategoryId, type FuelInfo, type PaymentMethodType } from "../types";
+import { useCurrency } from "../hooks/useCurrency";
 import { scanReceiptImage } from "../utils/scanReceiptImage";
 import { resizeDataUrl } from "../utils/imageResize";
 import { suggestCategory } from "../utils/autoCategorize";
@@ -15,6 +17,9 @@ export default function AddExpense() {
   const navigate = useNavigate();
   const { addExpense, expenses } = useExpenses();
   const { categories } = useCategories();
+  const { cards } = useCards();
+  const { showToast } = useToast();
+  const { formatAmount, currency } = useCurrency();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [amount, setAmount] = useState("");
@@ -23,6 +28,8 @@ export default function AddExpense() {
   const [note, setNote] = useState("");
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [merchant, setMerchant] = useState("");
+  const [paymentMethodType, setPaymentMethodType] = useState<PaymentMethodType>("cash");
+  const [paymentMethodId, setPaymentMethodId] = useState("");
   const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null);
   const [isFuel, setIsFuel] = useState(false);
   const [fuel, setFuel] = useState<FuelInfo>({
@@ -89,14 +96,14 @@ export default function AddExpense() {
       const parsed = await scanReceiptImage(photoDataUrl, setScanProgress);
 
       // Log the scanned receipt data for debugging
-      console.log('🛒 Receipt Scan Results:', {
+      console.log("🛒 Receipt Scan Results:", {
         merchant: parsed.merchant,
         total: parsed.total,
         date: parsed.date,
         reference: parsed.reference,
         description: parsed.description,
         items: parsed.items,
-        itemCount: parsed.items?.length || 0
+        itemCount: parsed.items?.length || 0,
       });
 
       setScannedItems(parsed.items);
@@ -128,10 +135,10 @@ export default function AddExpense() {
               : suggestCategory(parsed.merchant);
 
         // Log category suggestion
-        console.log('🏷️ Category Suggestion:', {
+        console.log("🏷️ Category Suggestion:", {
           merchant: parsed.merchant,
           suggestedCategory: suggested,
-          isFuel: suggested === "fuel"
+          isFuel: suggested === "fuel",
         });
 
         setCategoryId(suggested);
@@ -169,27 +176,35 @@ export default function AddExpense() {
   const handleAddAllAsItemized = async () => {
     const photo = await getPhotoForStorage();
     const dateIso = new Date(date).toISOString();
-    for (const item of scannedItems) {
-      if (!item.name.trim() || item.amount <= 0) continue;
-      const cat = item.categoryId ?? suggestCategory(item.name);
-      const expenseData: Record<string, unknown> = {
-        amount: item.amount,
-        currency: "PKR",
-        categoryId: cat,
-        note: merchant ? `${item.name}${healthDetails ? ` • ${healthDetails}` : ""} • ${merchant}` : item.name.trim(),
-        date: dateIso,
-      };
-      if (merchant) expenseData.merchant = merchant;
-      if (parsedReference) expenseData.reference = parsedReference;
-      if (photo) expenseData.photoDataUrl = photo;
-      addExpense(expenseData as Parameters<typeof addExpense>[0]);
+    try {
+      let addedCount = 0;
+      for (const item of scannedItems) {
+        if (!item.name.trim() || item.amount <= 0) continue;
+        const cat = item.categoryId ?? suggestCategory(item.name);
+        const expenseData: Record<string, unknown> = {
+          amount: item.amount,
+          currency: currency,
+          categoryId: cat,
+          note: merchant ? `${item.name}${healthDetails ? ` • ${healthDetails}` : ""} • ${merchant}` : item.name.trim(),
+          date: dateIso,
+        };
+        if (merchant) expenseData.merchant = merchant;
+        if (parsedReference) expenseData.reference = parsedReference;
+        if (photo) expenseData.photoDataUrl = photo;
+        await addExpense(expenseData as Parameters<typeof addExpense>[0]);
+        addedCount++;
+      }
+      setScannedItems([]);
+      setPhotoDataUrl(null);
+      setParsedTotal(undefined);
+      setParsedMerchant(undefined);
+      setHealthDetails("");
+      showToast(`Added ${addedCount} expense${addedCount > 1 ? "s" : ""} successfully`, "success");
+      navigate("/");
+    } catch (error) {
+      console.error("Failed to add itemized expenses:", error);
+      showToast("Failed to save expenses. Please try again.", "error");
     }
-    setScannedItems([]);
-    setPhotoDataUrl(null);
-    setParsedTotal(undefined);
-    setParsedMerchant(undefined);
-    setHealthDetails("");
-    navigate("/");
   };
 
   const handleAddAsSingleExpense = async () => {
@@ -200,7 +215,7 @@ export default function AddExpense() {
     const suggested = parsedMerchant ? suggestCategory(parsedMerchant) : categoryId;
     const expenseData: Record<string, unknown> = {
       amount: total,
-      currency: "PKR",
+      currency: currency,
       categoryId: suggested,
       note: [parsedDescription || note || parsedMerchant || "Receipt total", healthDetails].filter(Boolean).join(" • "),
       date: dateIso,
@@ -208,14 +223,20 @@ export default function AddExpense() {
     if (parsedMerchant) expenseData.merchant = parsedMerchant;
     if (parsedReference) expenseData.reference = parsedReference;
     if (photo) expenseData.photoDataUrl = photo;
-    addExpense(expenseData as Parameters<typeof addExpense>[0]);
-    setScannedItems([]);
-    setPhotoDataUrl(null);
-    setAmount("");
-    setParsedTotal(undefined);
-    setParsedMerchant(undefined);
-    setHealthDetails("");
-    navigate("/");
+    try {
+      await addExpense(expenseData as Parameters<typeof addExpense>[0]);
+      setScannedItems([]);
+      setPhotoDataUrl(null);
+      setAmount("");
+      setParsedTotal(undefined);
+      setParsedMerchant(undefined);
+      setHealthDetails("");
+      showToast("Expense added successfully", "success");
+      navigate("/");
+    } catch (error) {
+      console.error("Failed to add single expense:", error);
+      showToast("Failed to save expense. Please try again.", "error");
+    }
   };
 
   const getDuplicateHint = () => {
@@ -237,10 +258,12 @@ export default function AddExpense() {
     const photo = await getPhotoForStorage();
     const expenseData: Record<string, unknown> = {
       amount: num,
-      currency: "PKR",
+      currency: currency,
       categoryId: isFuel ? "fuel" : categoryId,
       note: [merchant, note.trim(), healthDetails.trim()].filter(Boolean).join(" • ") || note.trim(),
       date: new Date(date).toISOString(),
+      paymentMethodType,
+      paymentMethodId: paymentMethodType === "card" ? paymentMethodId : undefined,
     };
     if (merchant) expenseData.merchant = merchant;
     if (parsedReference) expenseData.reference = parsedReference;
@@ -254,9 +277,13 @@ export default function AddExpense() {
 
     setSaving(true);
     try {
-      addExpense(expenseData as Parameters<typeof addExpense>[0]);
+      await addExpense(expenseData as Parameters<typeof addExpense>[0]);
       setHealthDetails("");
+      showToast("Expense added successfully", "success");
       navigate("/");
+    } catch (error) {
+      console.error("Failed to save expense:", error);
+      showToast("Failed to save expense. Please try again.", "error");
     } finally {
       setSaving(false);
     }
@@ -333,7 +360,11 @@ export default function AddExpense() {
             >
               {scanning ? (
                 <>
-                  <XlviLoader boxColors={["var(--accent)"]} desktopSize="28px" mobileSize="22px" />
+                  <XlviLoader
+                    boxColors={["var(--accent)"]}
+                    desktopSize="28px"
+                    mobileSize="22px"
+                  />
                   <span>Scanning… {Math.round(scanProgress * 100)}%</span>
                 </>
               ) : (
@@ -386,7 +417,7 @@ export default function AddExpense() {
             {(parsedMerchant || parsedTotal || parsedDate || parsedReference) && (
               <div className="text-xs text-(--text-muted) space-y-0.5">
                 {parsedMerchant && <p>Merchant: {parsedMerchant}</p>}
-                {parsedTotal != null && <p>Amount: {formatPkr(parsedTotal)}</p>}
+                {parsedTotal != null && <p>Amount: {formatAmount(parsedTotal)}</p>}
                 {parsedDate && <p>Date: {format(new Date(parsedDate + "T12:00:00"), "dd MMM yyyy")}</p>}
                 {parsedReference && <p>Ref#: {parsedReference}</p>}
               </div>
@@ -399,8 +430,10 @@ export default function AddExpense() {
                     <li key={`bullet-${i}`}>
                       {item.name}
                       {item.quantity ? ` • Qty: ${item.quantity}` : ""}
-                      {item.unitPrice ? ` • Unit: Rs ${item.unitPrice.toFixed(2)}` : ""}
-                      {` • Total: Rs ${item.amount.toFixed(2)}`}
+                      {item.unitPrice
+                        ? ` • Unit: ${formatAmount(item.unitPrice, { compact: true, symbol: true })}`
+                        : ""}
+                      {` • Total: ${formatAmount(item.amount, { compact: true, symbol: true })}`}{" "}
                     </li>
                   ))}
                 </ul>
@@ -452,7 +485,6 @@ export default function AddExpense() {
                     className="w-16 px-2 py-1.5 rounded-lg bg-(--bg) border border-(--border) text-sm"
                     placeholder="Qty"
                   />
-                  <span className="text-xs text-(--text-muted) w-6">Rs</span>
                   <button
                     type="button"
                     onClick={() => removeScannedItem(i)}
@@ -465,7 +497,7 @@ export default function AddExpense() {
               ))}
             </ul>
             <p className="text-sm text-(--text-muted)">
-              Total: {formatPkr(scannedItems.reduce((s, i) => s + i.amount, 0))}
+              Total: {formatAmount(scannedItems.reduce((s, i) => s + i.amount, 0))}
             </p>
             <div className="flex gap-2 flex-wrap">
               <button
@@ -487,7 +519,7 @@ export default function AddExpense() {
         )}
 
         <div>
-          <label className="block text-sm font-medium text-(--text-muted) mb-1">Amount (Rs)</label>
+          <label className="block text-sm font-medium text-(--text-muted) mb-1">Amount</label>
           <input
             type="text"
             inputMode="decimal"
@@ -536,6 +568,79 @@ export default function AddExpense() {
           </div>
         )}
 
+        <div>
+          <label className="block text-sm font-medium text-(--text-muted) mb-2">Payment Method</label>
+          <div className="flex gap-3 mb-3">
+            <button
+              type="button"
+              onClick={() => setPaymentMethodType("cash")}
+              className={`flex-1 py-3 rounded-xl border text-sm font-medium transition touch-manipulation flex items-center justify-center gap-2 ${
+                paymentMethodType === "cash"
+                  ? "border-(--accent) bg-(--accent)/10 text-(--accent)"
+                  : "border-(--border) bg-(--surface) text-(--text-muted) hover:bg-(--surface-hover)"
+              }`}
+            >
+              <span>💵</span> Cash
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setPaymentMethodType("card");
+                if (cards.length > 0 && !paymentMethodId) {
+                  setPaymentMethodId(cards[0].id);
+                }
+              }}
+              className={`flex-1 py-3 rounded-xl border text-sm font-medium transition touch-manipulation flex items-center justify-center gap-2 ${
+                paymentMethodType === "card"
+                  ? "border-(--accent) bg-(--accent)/10 text-(--accent)"
+                  : "border-(--border) bg-(--surface) text-(--text-muted) hover:bg-(--surface-hover)"
+              }`}
+            >
+              <span>💳</span> Card
+            </button>
+          </div>
+
+          {paymentMethodType === "card" && (
+            <div className="animate-in fade-in slide-in-from-top-2 duration-200">
+              {cards.length > 0 ? (
+                <select
+                  value={paymentMethodId}
+                  onChange={(e) => setPaymentMethodId(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl bg-(--surface) border border-(--border) text-sm"
+                  required
+                >
+                  <option
+                    value=""
+                    disabled
+                  >
+                    Select a card
+                  </option>
+                  {cards.map((card) => (
+                    <option
+                      key={card.id}
+                      value={card.id}
+                    >
+                      {card.bankName} - {card.cardNumber.slice(-4)} ({card.cardHolderName})
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="p-4 rounded-xl bg-orange-50 border border-orange-200 text-orange-800 text-sm">
+                  No cards found. Please{" "}
+                  <button
+                    type="button"
+                    onClick={() => navigate("/cards")}
+                    className="underline font-bold"
+                  >
+                    add a card
+                  </button>{" "}
+                  first.
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         {(isFuelCategory || isFuel) && (
           <div className="rounded-xl bg-(--surface) border border-(--fuel)/30 p-4 space-y-3">
             <h3 className="font-medium text-(--fuel)">⛽ Fuel details</h3>
@@ -558,7 +663,7 @@ export default function AddExpense() {
                 />
               </div>
               <div>
-                <label className="block text-xs text-(--text-muted)">Price/L (Rs)</label>
+                <label className="block text-xs text-(--text-muted)">Price/L</label>
                 <input
                   type="number"
                   step="0.01"
@@ -657,9 +762,7 @@ export default function AddExpense() {
             rows={2}
             className="w-full px-4 py-3 rounded-xl bg-(--surface) border border-(--border) resize-none"
           />
-          {parsedReference && (
-            <p className="text-xs text-(--text-muted) mt-1">Ref#: {parsedReference}</p>
-          )}
+          {parsedReference && <p className="text-xs text-(--text-muted) mt-1">Ref#: {parsedReference}</p>}
         </div>
 
         {duplicateCount != null && duplicateCount > 0 && (
