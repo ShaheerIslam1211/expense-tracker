@@ -1,4 +1,5 @@
-import React, { createContext, useState, useContext, ReactNode } from "react";
+import { createContext, useState, useContext } from "react";
+import type { ReactNode } from "react";
 import { TransactionModal } from "../components/TransactionModal";
 import type { Expense } from "../types";
 
@@ -9,6 +10,7 @@ interface ModalContextValue {
 
 const ModalContext = createContext<ModalContextValue | null>(null);
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useModal = () => {
   const context = useContext(ModalContext);
   if (!context) {
@@ -42,7 +44,11 @@ export const ModalProvider = ({ children }: { children: ReactNode }) => {
   return (
     <ModalContext.Provider value={value}>
       {children}
-      <TransactionModal isOpen={isOpen} onClose={hideTransactionModal} editingTransaction={editingTransaction} />
+      <TransactionModal
+        isOpen={isOpen}
+        onClose={hideTransactionModal}
+        editingTransaction={editingTransaction}
+      />
     </ModalContext.Provider>
   );
 };
