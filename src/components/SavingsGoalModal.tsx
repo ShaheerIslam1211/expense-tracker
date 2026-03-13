@@ -4,7 +4,6 @@ import { X, Calendar, Tag, DollarSign } from "lucide-react";
 import { useSavings } from "../context/SavingsContext";
 import { useToast } from "../context/ToastContext";
 import type { SavingsGoal } from "../types";
-import { cn } from "../utils/cn";
 
 interface SavingsGoalModalProps {
   isOpen: boolean;
