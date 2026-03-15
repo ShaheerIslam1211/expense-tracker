@@ -152,6 +152,20 @@ button, a, input, select, textarea {
   transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease, box-shadow 0.3s ease;
 }
 
+:root.reduce-motion *,
+:root.reduce-motion *::before,
+:root.reduce-motion *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}
+
+:root.app-compact {
+  --radius-3xl: 1.35rem;
+  --radius-2xl: 1rem;
+  --radius-xl: 0.85rem;
+}
+
 /* Safe Area Insets for Mobile PWA */
 .safe-bottom {
   padding-bottom: env(safe-area-inset-bottom);

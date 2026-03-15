@@ -7,6 +7,7 @@ import { ExpenseProvider } from "./context/ExpenseContext";
 import { SavingsProvider } from "./context/SavingsContext";
 import { ToastProvider } from "./context/ToastContext";
 import { ThemeProvider } from "./context/ThemeContext";
+import { AppSettingsProvider } from "./context/AppSettingsContext";
 import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
 import AddExpense from "./pages/AddExpense";
@@ -31,7 +32,7 @@ function RequireAuth({ children }: RequireAuthProps) {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[var(--bg)]">
+      <div className="min-h-screen flex items-center justify-center bg-(--bg)">
         <AppLoader className="min-h-[50vh]" />
       </div>
     );
@@ -54,81 +55,83 @@ import { ModalProvider } from "./context/ModalContext";
 
 function App() {
   return (
-    <ThemeProvider>
-      <ToastProvider>
-        <AuthProvider>
-          <CategoryProvider>
-            <CardProvider>
-              <ExpenseProvider>
-                <SavingsProvider>
-                  <BudgetProvider>
-                    <ModalProvider>
-                      <BrowserRouter>
-                        <Routes>
-                          <Route
-                            path="/auth"
-                            element={<AuthPage />}
-                          />
-                          <Route
-                            path="/"
-                            element={
-                              <RequireAuth>
-                                <Layout />
-                              </RequireAuth>
-                            }
-                          >
+    <AuthProvider>
+      <ThemeProvider>
+        <AppSettingsProvider>
+          <ToastProvider>
+            <CategoryProvider>
+              <CardProvider>
+                <ExpenseProvider>
+                  <SavingsProvider>
+                    <BudgetProvider>
+                      <ModalProvider>
+                        <BrowserRouter>
+                          <Routes>
                             <Route
-                              index
-                              element={<Dashboard />}
+                              path="/auth"
+                              element={<AuthPage />}
                             />
                             <Route
-                              path="calendar"
-                              element={<CalendarPage />}
-                            />
-                            <Route
-                              path="add"
-                              element={<AddExpense />}
-                            />
-                            <Route
-                              path="edit/:id"
-                              element={<EditExpense />}
-                            />
-                            <Route
-                              path="history"
-                              element={<History />}
-                            />
-                            <Route
-                              path="cards"
-                              element={<Cards />}
-                            />
-                            <Route
-                              path="fuel"
-                              element={<Fuel />}
-                            />
-                            <Route
-                              path="insights"
-                              element={<Insights />}
-                            />
-                            <Route
-                              path="settings"
-                              element={<Settings />}
-                            />
-                            <Route
-                              path="savings"
-                              element={<Savings />}
-                            />
-                          </Route>
-                        </Routes>
-                      </BrowserRouter>
-                    </ModalProvider>
-                  </BudgetProvider>
-                </SavingsProvider>
-              </ExpenseProvider>
-            </CardProvider>
-          </CategoryProvider>
-        </AuthProvider>
-      </ToastProvider>
-    </ThemeProvider>
+                              path="/"
+                              element={
+                                <RequireAuth>
+                                  <Layout />
+                                </RequireAuth>
+                              }
+                            >
+                              <Route
+                                index
+                                element={<Dashboard />}
+                              />
+                              <Route
+                                path="calendar"
+                                element={<CalendarPage />}
+                              />
+                              <Route
+                                path="add"
+                                element={<AddExpense />}
+                              />
+                              <Route
+                                path="edit/:id"
+                                element={<EditExpense />}
+                              />
+                              <Route
+                                path="history"
+                                element={<History />}
+                              />
+                              <Route
+                                path="cards"
+                                element={<Cards />}
+                              />
+                              <Route
+                                path="fuel"
+                                element={<Fuel />}
+                              />
+                              <Route
+                                path="insights"
+                                element={<Insights />}
+                              />
+                              <Route
+                                path="settings"
+                                element={<Settings />}
+                              />
+                              <Route
+                                path="savings"
+                                element={<Savings />}
+                              />
+                            </Route>
+                          </Routes>
+                        </BrowserRouter>
+                      </ModalProvider>
+                    </BudgetProvider>
+                  </SavingsProvider>
+                </ExpenseProvider>
+              </CardProvider>
+            </CategoryProvider>
+          </ToastProvider>
+        </AppSettingsProvider>
+      </ThemeProvider>
+    </AuthProvider>
   );
 }
 

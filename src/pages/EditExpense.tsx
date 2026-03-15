@@ -5,10 +5,11 @@ import { XlviLoader } from "react-awesome-loaders";
 import { useExpenses } from "../context/ExpenseContext";
 import { useCategories } from "../context/CategoryContext";
 import { AppLoader } from "../components/AppLoader";
-import { type CategoryId, type FuelInfo, type PaymentMethodType } from "../types";
+import { type CategoryId, type FuelInfo, type PaymentMethodType, type ExpenseAdvancedDetails } from "../types";
 import { useCards } from "../context/CardContext";
 import { useToast } from "../context/ToastContext";
-import { resizeImage, needsResizing } from "../utils/imageResize";
+import { resizeImage, needsResizing, resizeDataUrl } from "../utils/imageResize";
+import { DETAIL_SUBCATEGORY_OPTIONS, FOOD_ITEM_TYPES, LAB_TEST_OPTIONS, buildDetailsSummary } from "../utils/expenseDetails";
 
 export default function EditExpense() {
   const { id } = useParams<{ id: string }>();
@@ -38,6 +39,32 @@ export default function EditExpense() {
   });
   const [processingPhoto, setProcessingPhoto] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [details, setDetails] = useState<ExpenseAdvancedDetails>({});
+  const detailReportInputRef = useRef<HTMLInputElement>(null);
+
+  const updateDetails = (updates: Partial<ExpenseAdvancedDetails>) => {
+    setDetails((prev) => ({ ...prev, ...updates }));
+  };
+
+  const toggleLabTest = (testValue: string) => {
+    setDetails((prev) => {
+      const current = prev.labTests ?? [];
+      const exists = current.includes(testValue);
+      return {
+        ...prev,
+        labTests: exists ? current.filter((t) => t !== testValue) : [...current, testValue],
+      };
+    });
+  };
+
+  const supportsAdvancedDetails = Boolean(DETAIL_SUBCATEGORY_OPTIONS[categoryId]?.length);
+  const isFoodGrocery = categoryId === "food" && details.subCategory === "groceries";
+  const isCookingOil = isFoodGrocery && details.itemType === "cooking-oil";
+  const isHealthInsulin = categoryId === "health" && (details.subCategory?.startsWith("insulin") ?? false);
+  const isHealthLabTest = categoryId === "health" && details.subCategory === "lab-test";
+  const isBillsMobilePackage = categoryId === "bills" && details.subCategory === "mobile-package";
+  const isDadInspectorVisit = categoryId === "dad" && details.subCategory === "inspector-visit";
+  const isTransportRideApp = categoryId === "transport" && ["indrive", "yango", "uber-careem"].includes(details.subCategory ?? "");
 
   useEffect(() => {
     if (expense) {
@@ -50,6 +77,7 @@ export default function EditExpense() {
       setPaymentMethodId(expense.paymentMethodId || "");
       setPhotoDataUrl(expense.photoDataUrl ?? null);
       setIsFuel(expense.categoryId === "fuel");
+      setDetails(expense.details ?? {});
       setFuel(
         expense.fuel ?? {
           volumeLiters: undefined,
@@ -60,6 +88,59 @@ export default function EditExpense() {
       );
     }
   }, [expense]);
+
+  useEffect(() => {
+    const options = DETAIL_SUBCATEGORY_OPTIONS[categoryId] ?? [];
+    if (options.length === 0) {
+      if (Object.keys(details).length > 0) setDetails({});
+      return;
+    }
+    if (!details.subCategory || !options.some((option) => option.value === details.subCategory)) {
+      setDetails((prev) => ({ ...prev, subCategory: options[0].value }));
+    }
+  }, [categoryId, details]);
+
+  const handleDetailReportUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+    if (files.length === 0) return;
+    try {
+      const uploaded = await Promise.all(
+        files.slice(0, 3).map(async (file) => {
+          if (file.type.startsWith("image/")) {
+            const dataUrl = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result as string);
+              reader.onerror = reject;
+              reader.readAsDataURL(file);
+            });
+            const optimized = await resizeDataUrl(dataUrl, 450 * 1024, 1200, 0.84);
+            return { name: file.name, mimeType: file.type, dataUrl: optimized };
+          }
+          if (file.type === "application/pdf") {
+            if (file.size > 550 * 1024) throw new Error(`${file.name} is too large.`);
+            const dataUrl = await new Promise<string>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result as string);
+              reader.onerror = reject;
+              reader.readAsDataURL(file);
+            });
+            return { name: file.name, mimeType: file.type, dataUrl };
+          }
+          throw new Error(`${file.name} unsupported`);
+        }),
+      );
+      setDetails((prev) => ({
+        ...prev,
+        reports: [...(prev.reports ?? []), ...uploaded].slice(0, 5),
+      }));
+      showToast("Test report uploaded", "success");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Upload failed";
+      showToast(message, "error");
+    } finally {
+      event.target.value = "";
+    }
+  };
 
   const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -91,10 +172,17 @@ export default function EditExpense() {
     const num = parseFloat(amount.replace(/,/g, ""));
     if (Number.isNaN(num) || num <= 0) return;
 
+    const normalizedDetails: ExpenseAdvancedDetails = {
+      ...Object.fromEntries(Object.entries(details).filter(([, value]) => typeof value === "string" && value.trim().length > 0)),
+      ...(details.labTests?.length ? { labTests: details.labTests } : {}),
+      ...(details.reports?.length ? { reports: details.reports } : {}),
+    };
+    const detailSummary = buildDetailsSummary(normalizedDetails);
+
     const updates: Record<string, unknown> = {
       amount: num,
       categoryId: isFuel ? "fuel" : categoryId,
-      note: note.trim(),
+      note: [note.trim(), detailSummary].filter(Boolean).join(" • "),
       date: new Date(date).toISOString(),
       paymentMethodType,
       paymentMethodId: paymentMethodType === "card" ? paymentMethodId : undefined,
@@ -110,6 +198,11 @@ export default function EditExpense() {
       updates.fuel = fuel;
     } else if (!isFuel) {
       updates.fuel = undefined;
+    }
+    if (supportsAdvancedDetails && Object.keys(normalizedDetails).length > 0) {
+      updates.details = normalizedDetails;
+    } else {
+      updates.details = undefined;
     }
 
     setSaving(true);
@@ -190,6 +283,7 @@ export default function EditExpense() {
                 onClick={() => {
                   setCategoryId(c.id);
                   setIsFuel(c.id === "fuel");
+                  setDetails({});
                 }}
                 className={`flex flex-col items-center gap-1 p-3 rounded-xl border text-sm transition min-h-16 ${
                   categoryId === c.id
@@ -216,6 +310,230 @@ export default function EditExpense() {
               onChange={(e) => setCustomCategory(e.target.value)}
               className="w-full px-4 py-3 rounded-xl bg-[var(--surface)] border border-[var(--border)]"
             />
+          </div>
+        )}
+
+        {supportsAdvancedDetails && (
+          <div className="rounded-xl bg-[var(--surface)] border border-[var(--border)] p-4 space-y-3">
+            <h3 className="font-medium">Advanced category details</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <select
+                value={details.subCategory ?? ""}
+                onChange={(e) =>
+                  updateDetails({
+                    subCategory: e.target.value,
+                    itemType: undefined,
+                    dosagePlan: undefined,
+                    quantity: undefined,
+                    unit: undefined,
+                    packageType: undefined,
+                    inspectionType: undefined,
+                    routeType: undefined,
+                    labTests: undefined,
+                    customLabTest: undefined,
+                  })
+                }
+                className="w-full px-3 py-2 rounded-lg bg-[var(--bg)] border border-[var(--border)]"
+              >
+                {(DETAIL_SUBCATEGORY_OPTIONS[categoryId] ?? []).map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+
+              {(categoryId === "food" || categoryId === "shopping" || categoryId === "health") && (
+                <select
+                  value={details.itemType ?? ""}
+                  onChange={(e) => updateDetails({ itemType: e.target.value })}
+                  className="w-full px-3 py-2 rounded-lg bg-[var(--bg)] border border-[var(--border)]"
+                >
+                  <option value="">Select item type</option>
+                  {(categoryId === "food" ? FOOD_ITEM_TYPES : []).map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                  {categoryId === "shopping" && (
+                    <>
+                      <option value="clothes">Clothes</option>
+                      <option value="footwear">Footwear</option>
+                      <option value="electronics">Electronics</option>
+                      <option value="home-items">Home Items</option>
+                    </>
+                  )}
+                  {categoryId === "health" && (
+                    <>
+                      <option value="apidra">Apidra</option>
+                      <option value="lantus">Lantus</option>
+                      <option value="apidra-lantus">Apidra + Lantus</option>
+                      <option value="test-strips">Test Strips</option>
+                    </>
+                  )}
+                </select>
+              )}
+
+              {isCookingOil && (
+                <>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={details.quantity ?? ""}
+                    onChange={(e) => updateDetails({ quantity: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg bg-[var(--bg)] border border-[var(--border)]"
+                    placeholder="Oil quantity"
+                  />
+                  <select
+                    value={details.unit ?? "litre"}
+                    onChange={(e) => updateDetails({ unit: e.target.value })}
+                    className="w-full px-3 py-2 rounded-lg bg-[var(--bg)] border border-[var(--border)]"
+                  >
+                    <option value="litre">Litre</option>
+                    <option value="ml">Millilitre</option>
+                  </select>
+                </>
+              )}
+
+              {isBillsMobilePackage && (
+                <select
+                  value={details.packageType ?? ""}
+                  onChange={(e) => updateDetails({ packageType: e.target.value })}
+                  className="w-full px-3 py-2 rounded-lg bg-[var(--bg)] border border-[var(--border)]"
+                >
+                  <option value="">Select package</option>
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                  <option value="postpaid">Postpaid</option>
+                </select>
+              )}
+
+              {isDadInspectorVisit && (
+                <select
+                  value={details.inspectionType ?? ""}
+                  onChange={(e) => updateDetails({ inspectionType: e.target.value })}
+                  className="w-full px-3 py-2 rounded-lg bg-[var(--bg)] border border-[var(--border)]"
+                >
+                  <option value="">Inspection type</option>
+                  <option value="property">Property Check</option>
+                  <option value="utility">Utility Check</option>
+                  <option value="document">Document Verification</option>
+                </select>
+              )}
+
+              {isTransportRideApp && (
+                <select
+                  value={details.routeType ?? ""}
+                  onChange={(e) => updateDetails({ routeType: e.target.value })}
+                  className="w-full px-3 py-2 rounded-lg bg-[var(--bg)] border border-[var(--border)]"
+                >
+                  <option value="">Route type</option>
+                  <option value="one-way">One Way</option>
+                  <option value="round-trip">Round Trip</option>
+                  <option value="within-city">Within City</option>
+                  <option value="inter-city">Inter City</option>
+                </select>
+              )}
+
+              {(categoryId === "dad" || categoryId === "bills" || categoryId === "transport" || categoryId === "utilities") && (
+                <input
+                  type="text"
+                  value={details.provider ?? ""}
+                  onChange={(e) => updateDetails({ provider: e.target.value })}
+                  className="w-full px-3 py-2 rounded-lg bg-[var(--bg)] border border-[var(--border)]"
+                  placeholder="Provider / source"
+                />
+              )}
+            </div>
+
+            {isHealthInsulin && (
+              <select
+                value={details.dosagePlan ?? ""}
+                onChange={(e) => updateDetails({ dosagePlan: e.target.value })}
+                className="w-full px-3 py-2 rounded-lg bg-[var(--bg)] border border-[var(--border)]"
+              >
+                <option value="">Dosage plan</option>
+                <option value="once-daily">Once Daily</option>
+                <option value="twice-daily">Twice Daily</option>
+                <option value="as-needed">As Needed</option>
+              </select>
+            )}
+
+            {isHealthLabTest && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Lab tests (select multiple)</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {LAB_TEST_OPTIONS.map((test) => {
+                    const active = details.labTests?.includes(test.value) ?? false;
+                    return (
+                      <button
+                        key={test.value}
+                        type="button"
+                        onClick={() => toggleLabTest(test.value)}
+                        className={`px-3 py-2 rounded-lg border text-left text-sm ${
+                          active
+                            ? "border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]"
+                            : "border-[var(--border)] bg-[var(--bg)]"
+                        }`}
+                      >
+                        {test.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <input
+                  type="text"
+                  value={details.customLabTest ?? ""}
+                  onChange={(e) => updateDetails({ customLabTest: e.target.value })}
+                  className="w-full px-3 py-2 rounded-lg bg-[var(--bg)] border border-[var(--border)]"
+                  placeholder="Custom lab test (optional)"
+                />
+              </div>
+            )}
+
+            {categoryId === "health" && (
+              <div className="space-y-2">
+                <input
+                  ref={detailReportInputRef}
+                  type="file"
+                  multiple
+                  accept="image/*,application/pdf"
+                  className="hidden"
+                  onChange={handleDetailReportUpload}
+                />
+                <button
+                  type="button"
+                  onClick={() => detailReportInputRef.current?.click()}
+                  className="px-3 py-2 rounded-lg border border-[var(--border)] bg-[var(--bg)] text-sm"
+                >
+                  Upload test report (PDF/photo)
+                </button>
+                {(details.reports?.length ?? 0) > 0 && (
+                  <div className="space-y-1">
+                    {details.reports?.map((report, index) => (
+                      <div key={`${report.name}-${index}`} className="flex items-center justify-between text-sm">
+                        <span className="truncate pr-2">
+                          {report.mimeType === "application/pdf" ? "PDF" : "Image"} - {report.name}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setDetails((prev) => ({
+                              ...prev,
+                              reports: (prev.reports ?? []).filter((_, i) => i !== index),
+                            }))
+                          }
+                          className="text-[var(--danger)]"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 
