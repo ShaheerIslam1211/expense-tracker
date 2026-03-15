@@ -61,6 +61,27 @@ export interface RecurringInfo {
   endDate?: string; // ISO
 }
 
+export interface ExpenseAdvancedDetails {
+  subCategory?: string;
+  itemType?: string;
+  variant?: string;
+  provider?: string;
+  billType?: string;
+  packageType?: string;
+  quantity?: string;
+  unit?: string;
+  dosagePlan?: string;
+  inspectionType?: string;
+  routeType?: string;
+  labTests?: string[];
+  customLabTest?: string;
+  reports?: Array<{
+    name: string;
+    mimeType: string;
+    dataUrl: string;
+  }>;
+}
+
 export interface Expense {
   id: string;
   type: TransactionType;
@@ -75,6 +96,7 @@ export interface Expense {
   createdAt: string;
   photoDataUrl?: string;
   fuel?: FuelInfo;
+  details?: ExpenseAdvancedDetails;
   paymentMethodType: PaymentMethodType;
   paymentMethodId?: string; // Card ID if paymentMethodType is 'card'
   recurring?: RecurringInfo;
@@ -97,8 +119,28 @@ export interface UserData {
   email: string;
   bio?: string;
   photoUrl?: string;
+  phone?: string;
+  country?: string;
+  timezone?: string;
+  companyName?: string;
+  companyRole?: string;
+  isCompanyLinked?: boolean;
   currency?: string;
   theme?: "light" | "dark" | "system";
+  hideSensitiveValues?: boolean;
+  appSettings?: {
+    defaultTransactionType?: TransactionType;
+    defaultPaymentMethodType?: PaymentMethodType;
+    autoScanReceiptOnUpload?: boolean;
+    compactNumberFormatting?: boolean;
+    weekStartsOnMonday?: boolean;
+    reducedMotion?: boolean;
+    mobileNavbarFixed?: boolean;
+    showFloatingAddButton?: boolean;
+    showPwaInstallPrompt?: boolean;
+    showSidebarTipCard?: boolean;
+    compactLayout?: boolean;
+  };
   createdAt: string;
 }
 

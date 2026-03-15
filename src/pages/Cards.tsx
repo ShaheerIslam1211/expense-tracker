@@ -8,6 +8,8 @@ import { useToast } from "../context/ToastContext";
 import { cn } from "../utils/cn";
 import { getCurrencyConfig } from "../utils/currency";
 import type { Card } from "../types";
+import { maskAmount, useSensitiveMode } from "../hooks/useSensitiveMode";
+import { useModalBehavior } from "../hooks/useModalBehavior";
 
 function getCardDigits(value: string): string {
   return value.replace(/\D/g, "");
@@ -29,10 +31,12 @@ const CardItem = ({
   card,
   onDelete,
   onEdit,
+  hideSensitiveValues,
 }: {
   card: Card;
   onDelete: (id: string) => void;
   onEdit: (card: Card) => void;
+  hideSensitiveValues: boolean;
 }) => {
   const { getBalances, expenses } = useExpenses();
   const { formatAmount } = useCurrency();
@@ -102,7 +106,7 @@ const CardItem = ({
           <div className="flex justify-between items-end mt-6">
             <div>
               <p className="text-[10px] font-black uppercase tracking-widest opacity-60 mb-1">Balance</p>
-              <p className="text-2xl font-black">{formatAmount(balance)}</p>
+              <p className="text-2xl font-black">{maskAmount(formatAmount(balance), hideSensitiveValues)}</p>
             </div>
             <div className="flex gap-2">
               <button
@@ -130,7 +134,8 @@ const CardItem = ({
               Monthly Limit
             </span>
             <span className="text-[10px] font-black text-foreground uppercase tracking-widest">
-              {formatAmount(monthSpending)} / {formatAmount(card.limit)}
+              {maskAmount(formatAmount(monthSpending), hideSensitiveValues)} /{" "}
+              {maskAmount(formatAmount(card.limit), hideSensitiveValues)}
             </span>
           </div>
           <div className="h-1.5 bg-accent/20 rounded-full overflow-hidden">
@@ -153,8 +158,10 @@ export default function Cards() {
   const { cards, addCard, deleteCard, updateCard } = useCards();
   const { showToast } = useToast();
   const { currency } = useCurrency();
+  const { hideSensitiveValues, toggleSensitiveValues } = useSensitiveMode();
   const [isAdding, setIsAdding] = useState(false);
   const [editingCard, setEditingCard] = useState<Card | null>(null);
+  useModalBehavior(isAdding, () => setIsAdding(false));
 
   const [formData, setFormData] = useState<Omit<Card, "id">>({
     bankName: "",
@@ -222,21 +229,32 @@ export default function Cards() {
   };
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-10 animate-in">
+    <div className="p-3 sm:p-6 max-w-6xl mx-auto space-y-8 sm:space-y-10 animate-in">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6">
         <div>
-          <h1 className="text-4xl font-black tracking-tight text-foreground">My Wallets</h1>
+          <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-foreground">My Wallets</h1>
           <p className="text-muted-foreground mt-1 font-medium">Manage your cards and bank accounts.</p>
         </div>
 
-        <button
-          onClick={() => setIsAdding(true)}
-          className="bg-primary text-primary-foreground px-6 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl shadow-primary/20 hover:scale-105 active:scale-95 transition-all flex items-center gap-3"
-        >
-          <Plus className="h-5 w-5" />
-          Add New Card
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={toggleSensitiveValues}
+            className="flex items-center gap-2 bg-card border border-border rounded-xl px-3 py-2 text-xs font-black uppercase tracking-widest text-foreground"
+            aria-label={hideSensitiveValues ? "Show card balances" : "Hide card balances"}
+            title={hideSensitiveValues ? "Show balances" : "Hide balances"}
+          >
+            {hideSensitiveValues ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+            {hideSensitiveValues ? "Show Balances" : "Hide Balances"}
+          </button>
+          <button
+            onClick={() => setIsAdding(true)}
+            className="bg-primary text-primary-foreground px-5 sm:px-6 py-3 sm:py-4 rounded-2xl font-black text-[10px] sm:text-xs uppercase tracking-widest shadow-xl shadow-primary/20 hover:scale-105 active:scale-95 transition-all flex items-center gap-2 sm:gap-3"
+          >
+            <Plus className="h-5 w-5" />
+            Add New Card
+          </button>
+        </div>
       </div>
 
       <AnimatePresence>
@@ -245,15 +263,16 @@ export default function Cards() {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm"
+            onClick={handleClose}
           >
             <motion.form
               onSubmit={handleSubmit}
-              className="bg-card w-full max-w-2xl rounded-[2.5rem] shadow-2xl border border-border overflow-hidden"
+              className="bg-card w-full max-w-2xl rounded-t-[2.2rem] sm:rounded-[2.5rem] shadow-2xl border border-border overflow-hidden"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="p-8 border-b border-border bg-accent/10 flex justify-between items-center">
-                <h2 className="text-2xl font-black text-foreground">{editingCard ? "Edit Card" : "Add New Card"}</h2>
+              <div className="p-5 sm:p-8 border-b border-border bg-accent/10 flex justify-between items-center">
+                <h2 className="text-xl sm:text-2xl font-black text-foreground">{editingCard ? "Edit Card" : "Add New Card"}</h2>
                 <button
                   type="button"
                   onClick={handleClose}
@@ -263,7 +282,7 @@ export default function Cards() {
                 </button>
               </div>
 
-              <div className="p-8 space-y-6 max-h-[70vh] overflow-y-auto">
+              <div className="p-5 sm:p-8 space-y-6 max-h-[78vh] overflow-y-auto">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Bank Name */}
                   <div className="space-y-2">
@@ -402,7 +421,7 @@ export default function Cards() {
                 </div>
               </div>
 
-              <div className="p-8 border-t border-border bg-accent/5 flex gap-4">
+              <div className="p-5 sm:p-8 border-t border-border bg-accent/5 flex gap-3 sm:gap-4">
                 <button
                   type="button"
                   onClick={handleClose}
@@ -422,7 +441,7 @@ export default function Cards() {
         )}
       </AnimatePresence>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 sm:gap-8">
         <AnimatePresence>
           {cards.map((card) => (
             <CardItem
@@ -430,6 +449,7 @@ export default function Cards() {
               card={card}
               onDelete={deleteCard}
               onEdit={handleEdit}
+              hideSensitiveValues={hideSensitiveValues}
             />
           ))}
         </AnimatePresence>

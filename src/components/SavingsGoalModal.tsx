@@ -1,8 +1,10 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { createPortal } from "react-dom";
 import { X, Calendar, Tag, DollarSign } from "lucide-react";
 import { useSavings } from "../context/SavingsContext";
 import { useToast } from "../context/ToastContext";
+import { useModalBehavior } from "../hooks/useModalBehavior";
 import type { SavingsGoal } from "../types";
 
 interface SavingsGoalModalProps {
@@ -19,6 +21,7 @@ export const SavingsGoalModal: React.FC<SavingsGoalModalProps> = ({ isOpen, onCl
   const [targetAmount, setTargetAmount] = useState(editingGoal?.targetAmount.toString() || "");
   const [type, setType] = useState<"short-term" | "long-term">(editingGoal?.type || "short-term");
   const [dueDate, setDueDate] = useState(editingGoal?.dueDate || "");
+  useModalBehavior(isOpen, onClose);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,20 +55,22 @@ export const SavingsGoalModal: React.FC<SavingsGoalModalProps> = ({ isOpen, onCl
     }
   };
 
-  return (
+  const modalContent = (
     <AnimatePresence>
       {isOpen && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4"
+          onClick={onClose}
         >
           <motion.div
             initial={{ y: -50, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: -50, opacity: 0 }}
-            className="bg-card w-full max-w-lg rounded-3xl shadow-2xl border border-border"
+            className="bg-card w-full max-w-lg rounded-3xl shadow-2xl border border-border max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="p-6 flex items-center justify-between border-b border-border">
               <h2 className="text-2xl font-bold text-foreground">{editingGoal ? "Edit Goal" : "New Financial Goal"}</h2>
@@ -125,7 +130,7 @@ export const SavingsGoalModal: React.FC<SavingsGoalModalProps> = ({ isOpen, onCl
                   <label className="text-sm font-bold text-muted-foreground">Goal Type</label>
                   <select
                     value={type}
-                    onChange={(e) => setType(e.target.value as any)}
+                    onChange={(e) => setType(e.target.value as "short-term" | "long-term")}
                     className="w-full px-4 py-3 rounded-xl bg-background border border-border font-semibold focus:ring-2 focus:ring-primary/50 outline-none transition appearance-none"
                   >
                     <option value="short-term">Short-term</option>
@@ -168,4 +173,7 @@ export const SavingsGoalModal: React.FC<SavingsGoalModalProps> = ({ isOpen, onCl
       )}
     </AnimatePresence>
   );
+
+  if (typeof document === "undefined") return null;
+  return createPortal(modalContent, document.body);
 };

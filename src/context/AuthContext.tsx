@@ -71,6 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email,
       currency: "USD",
       theme: "system",
+      hideSensitiveValues: true,
       createdAt: new Date().toISOString(),
     });
   };
@@ -90,6 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email: cred.user.email ?? "",
         currency: "USD",
         theme: "system",
+        hideSensitiveValues: true,
         createdAt: new Date().toISOString(),
       });
     }
@@ -97,18 +99,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const updateUserProfile = async (updates: Partial<UserData>) => {
     if (!user) return;
-    const { updateDoc } = await import("firebase/firestore");
-    const cleanUpdates = Object.fromEntries(Object.entries(updates).filter(([, v]) => v !== undefined)) as Record<
-      string,
-      string | number | boolean | undefined
-    >;
-    await updateDoc(doc(db, "users", user.uid), cleanUpdates);
+    const cleanUpdates = Object.fromEntries(
+      Object.entries(updates).filter(([, v]) => v !== undefined),
+    ) as Record<string, unknown>;
+    await setDoc(doc(db, "users", user.uid), cleanUpdates, { merge: true });
 
     if (updates.name) {
       await updateProfile(user, { displayName: updates.name });
     }
-    if (updates.photoUrl) {
-      await updateProfile(user, { photoURL: updates.photoUrl });
+    if ("photoUrl" in updates) {
+      const nextPhotoUrl = updates.photoUrl?.trim();
+      await updateProfile(user, { photoURL: nextPhotoUrl || null });
     }
   };
 

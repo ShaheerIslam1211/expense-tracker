@@ -43,6 +43,15 @@ interface ExpenseContextValue {
 
 const ExpenseContext = createContext<ExpenseContextValue | null>(null);
 
+function generateExpenseReference(): string {
+  // 7-digit reference (time + random) keeps the familiar "Ref-0900112" style.
+  const timePart = Date.now().toString().slice(-4);
+  const randomPart = Math.floor(Math.random() * 1000)
+    .toString()
+    .padStart(3, "0");
+  return `Ref-${timePart}${randomPart}`;
+}
+
 function stripUndefinedDeep<T>(value: T): T {
   if (Array.isArray(value)) {
     return value.map((item) => stripUndefinedDeep(item)) as T;
@@ -150,14 +159,17 @@ export function ExpenseProvider({ children }: { children: ReactNode }) {
       processRecurringTransactions(next);
     });
     return () => unsub();
-  }, [user, processRecurringTransactions]);
+  }, [user, processRecurringTransactions, expenses.length]);
 
   const addExpense = useCallback(
     async (expense: Omit<Expense, "id" | "createdAt">) => {
       if (!user) return;
       const expenseId = uuidv4();
+      const reference =
+        expense.type === "expense" && !expense.reference?.trim() ? generateExpenseReference() : expense.reference;
       const newExpense: Expense = {
         ...expense,
+        reference,
         id: expenseId,
         createdAt: new Date().toISOString(),
       };

@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { useAuth } from "./AuthContext";
 
 type Theme = "light" | "dark" | "system";
 
@@ -11,6 +12,7 @@ interface ThemeContextValue {
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
+  const { user, userData, loading, updateUserProfile } = useAuth();
   const [theme, setThemeState] = useState<Theme>(() => {
     // Try to get theme from localStorage first, fallback to system
     try {
@@ -49,12 +51,26 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const setTheme = useCallback((newTheme: Theme) => {
     setThemeState(newTheme);
     applyTheme(newTheme);
-  }, [applyTheme]);
+    if (user) {
+      void updateUserProfile({ theme: newTheme });
+    }
+  }, [applyTheme, updateUserProfile, user]);
 
   // Apply theme on mount and when theme changes
   useEffect(() => {
     applyTheme(theme);
   }, [theme, applyTheme]);
+
+  // Hydrate theme from Firebase profile for cross-device consistency.
+  useEffect(() => {
+    if (loading) return;
+    if (!user) return;
+    const cloudTheme = userData?.theme;
+    if (!cloudTheme) return;
+    if (cloudTheme === theme) return;
+    setThemeState(cloudTheme);
+    applyTheme(cloudTheme);
+  }, [loading, user, userData?.theme, theme, applyTheme]);
 
   // Listen for system theme changes when theme is "system"
   useEffect(() => {

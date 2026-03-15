@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { format, parseISO, isWithinInterval, startOfDay, endOfDay } from "date-fns";
+import { createPortal } from "react-dom";
+import { format, parseISO, isWithinInterval, startOfDay, endOfDay, subDays, startOfMonth, startOfYear } from "date-fns";
 import {
   Search,
   Filter,
@@ -12,6 +13,8 @@ import {
   ArrowUpCircle,
   FileText,
   FileDown,
+  X,
+  Maximize2,
 } from "lucide-react";
 import { useExpenses } from "../context/ExpenseContext";
 import { useCategories } from "../context/CategoryContext";
@@ -22,6 +25,7 @@ import { useCurrency } from "../hooks/useCurrency";
 import { cn } from "../utils/cn";
 import { exportToCSV, exportToPDF } from "../utils/export";
 import { useModal } from "../context/ModalContext";
+import { useModalBehavior } from "../hooks/useModalBehavior";
 
 function ExpenseRow({
   expense,
@@ -137,10 +141,13 @@ export default function History() {
     format(new Date(new Date().getFullYear(), new Date().getMonth(), 1), "yyyy-MM-dd"),
   );
   const [endDate, setEndDate] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [photoModal, setPhotoModal] = useState<string | null>(null);
+  const [photoModalExpense, setPhotoModalExpense] = useState<Expense | null>(null);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<"newest" | "oldest" | "highest" | "lowest">("newest");
+  const [datePreset, setDatePreset] = useState<"month" | "last30" | "year" | "all">("month");
+  const closePhotoModal = () => setPhotoModalExpense(null);
 
   const { showTransactionModal } = useModal();
 
@@ -149,6 +156,7 @@ export default function History() {
   const { categories } = useCategories();
   const { cards } = useCards();
   const { formatAmount } = useCurrency();
+  useModalBehavior(Boolean(photoModalExpense), closePhotoModal);
 
   const expenses = allExpenses
     .filter((e) => {
@@ -170,7 +178,52 @@ export default function History() {
 
       return matchSearch && matchCat && matchType && matchDate;
     })
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    .sort((a, b) => {
+      if (sortBy === "oldest") return new Date(a.date).getTime() - new Date(b.date).getTime();
+      if (sortBy === "highest") return b.amount - a.amount;
+      if (sortBy === "lowest") return a.amount - b.amount;
+      return new Date(b.date).getTime() - new Date(a.date).getTime();
+    });
+
+  const totalExpenseAmount = expenses.filter((e) => e.type === "expense").reduce((sum, e) => sum + e.amount, 0);
+  const totalIncomeAmount = expenses.filter((e) => e.type === "income").reduce((sum, e) => sum + e.amount, 0);
+  const netAmount = totalIncomeAmount - totalExpenseAmount;
+  const averageAmount = expenses.length > 0 ? expenses.reduce((sum, e) => sum + e.amount, 0) / expenses.length : 0;
+  const duplicateCandidates = Object.values(
+    expenses
+      .filter((e) => e.type === "expense")
+      .reduce<Record<string, Expense[]>>((acc, expense) => {
+        const textKey = (expense.merchant || expense.note || "").trim().toLowerCase().slice(0, 20);
+        const key = `${expense.date.slice(0, 10)}|${expense.amount.toFixed(2)}|${textKey}`;
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(expense);
+        return acc;
+      }, {}),
+  )
+    .filter((group) => group.length > 1)
+    .sort((a, b) => b.length - a.length);
+
+  const applyDatePreset = (preset: "month" | "last30" | "year" | "all") => {
+    const today = new Date();
+    setDatePreset(preset);
+    if (preset === "month") {
+      setStartDate(format(startOfMonth(today), "yyyy-MM-dd"));
+      setEndDate(format(today, "yyyy-MM-dd"));
+      return;
+    }
+    if (preset === "last30") {
+      setStartDate(format(subDays(today, 29), "yyyy-MM-dd"));
+      setEndDate(format(today, "yyyy-MM-dd"));
+      return;
+    }
+    if (preset === "year") {
+      setStartDate(format(startOfYear(today), "yyyy-MM-dd"));
+      setEndDate(format(today, "yyyy-MM-dd"));
+      return;
+    }
+    setStartDate("2000-01-01");
+    setEndDate(format(today, "yyyy-MM-dd"));
+  };
 
   const handleDelete = async (expense: Expense) => {
     if (window.confirm(`Delete transaction "${expense.note || "Transaction"}" (${formatAmount(expense.amount)})?`)) {
@@ -258,6 +311,38 @@ export default function History() {
           </div>
         </div>
 
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="relative md:col-span-1">
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as "newest" | "oldest" | "highest" | "lowest")}
+              className="w-full px-4 py-3 bg-accent/10 border border-border rounded-xl font-bold appearance-none outline-none focus:border-primary transition-all"
+            >
+              <option value="newest">Sort: Newest First</option>
+              <option value="oldest">Sort: Oldest First</option>
+              <option value="highest">Sort: Highest Amount</option>
+              <option value="lowest">Sort: Lowest Amount</option>
+            </select>
+          </div>
+          <div className="md:col-span-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="bg-accent/10 border border-border rounded-xl px-4 py-3">
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Total Expense</p>
+              <p className="text-lg font-black text-foreground">{formatAmount(totalExpenseAmount)}</p>
+            </div>
+            <div className="bg-accent/10 border border-border rounded-xl px-4 py-3">
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Net</p>
+              <p className={cn("text-lg font-black", netAmount >= 0 ? "text-success" : "text-danger")}>
+                {netAmount >= 0 ? "+" : "-"}
+                {formatAmount(Math.abs(netAmount))}
+              </p>
+            </div>
+            <div className="bg-accent/10 border border-border rounded-xl px-4 py-3">
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Avg Transaction</p>
+              <p className="text-lg font-black text-foreground">{formatAmount(averageAmount)}</p>
+            </div>
+          </div>
+        </div>
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-1">
             <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">
@@ -289,10 +374,52 @@ export default function History() {
           </div>
         </div>
 
+        <div className="flex flex-wrap items-center gap-2">
+          {[
+            { id: "month", label: "This Month" },
+            { id: "last30", label: "Last 30 Days" },
+            { id: "year", label: "This Year" },
+            { id: "all", label: "All Time" },
+          ].map((preset) => (
+            <button
+              key={preset.id}
+              type="button"
+              onClick={() => applyDatePreset(preset.id as "month" | "last30" | "year" | "all")}
+              className={cn(
+                "px-3 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border transition-all",
+                datePreset === preset.id
+                  ? "bg-primary/10 border-primary text-primary"
+                  : "bg-accent/20 border-border text-muted-foreground hover:bg-accent/40",
+              )}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+
         <div className="flex items-center gap-2 text-xs font-black text-muted-foreground uppercase tracking-widest">
           <FileText className="h-4 w-4" />
           <span>{expenses.length} Transactions Found</span>
         </div>
+
+        {duplicateCandidates.length > 0 && (
+          <div className="border border-warning/30 bg-warning/10 rounded-2xl p-4">
+            <p className="text-xs font-black uppercase tracking-widest text-warning mb-2">
+              Duplicate Detector ({duplicateCandidates.length} groups)
+            </p>
+            <div className="space-y-2">
+              {duplicateCandidates.slice(0, 3).map((group, idx) => (
+                <p
+                  key={idx}
+                  className="text-xs font-semibold text-foreground"
+                >
+                  {group.length} similar entries on {format(parseISO(group[0].date), "dd MMM yyyy")} for{" "}
+                  {formatAmount(group[0].amount)} ({group[0].merchant || group[0].note || "No description"})
+                </p>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="space-y-4">
@@ -305,7 +432,7 @@ export default function History() {
               cards={cards}
               onDelete={() => handleDelete(expense)}
               onEdit={() => showTransactionModal(expense)}
-              onPhotoClick={() => (expense.photoDataUrl ? setPhotoModal(expense.photoDataUrl) : null)}
+              onPhotoClick={() => (expense.photoDataUrl ? setPhotoModalExpense(expense) : null)}
               formatAmount={formatAmount}
             />
           ))
@@ -318,18 +445,102 @@ export default function History() {
         )}
       </div>
 
-      {photoModal && (
+      {photoModalExpense?.photoDataUrl &&
+        typeof document !== "undefined" &&
+        createPortal(
         <div
-          className="fixed inset-0 z-[60] bg-black/90 flex items-center justify-center p-8 backdrop-blur-sm"
-          onClick={() => setPhotoModal(null)}
+          className="fixed inset-0 z-60 bg-black/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-6"
+          onClick={closePhotoModal}
         >
-          <img
-            src={photoModal}
-            alt="Receipt"
-            className="max-w-full max-h-full object-contain rounded-[2rem] shadow-2xl"
+          <div
+            className="w-full sm:max-w-6xl h-[calc(100dvh-1rem)] sm:h-[calc(100dvh-3rem)] bg-background border border-border rounded-3xl overflow-hidden shadow-2xl flex flex-col"
             onClick={(e) => e.stopPropagation()}
-          />
-        </div>
+          >
+            <div className="p-4 sm:p-5 border-b border-border bg-card flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Receipt Preview</p>
+                <h3 className="text-sm sm:text-base font-black text-foreground truncate">
+                  {photoModalExpense.note || photoModalExpense.merchant || "Expense"}
+                </h3>
+              </div>
+              <button
+                onClick={closePhotoModal}
+                className="p-2 hover:bg-accent rounded-full transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] min-h-0 flex-1">
+              <div className="relative min-h-0 bg-black/50">
+                <img
+                  src={photoModalExpense.photoDataUrl}
+                  alt="Receipt"
+                  className="w-full h-full object-contain"
+                />
+                <div className="absolute top-3 right-3 bg-black/60 text-white text-[10px] font-black uppercase tracking-widest px-2 py-1 rounded-full flex items-center gap-1">
+                  <Maximize2 className="h-3 w-3" />
+                  Fit View
+                </div>
+              </div>
+
+              <div className="p-4 sm:p-5 border-t lg:border-t-0 lg:border-l border-border bg-card overflow-y-auto space-y-4">
+                <div className="space-y-1">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Amount</p>
+                  <p className={cn("text-2xl font-black", photoModalExpense.type === "income" ? "text-success" : "text-foreground")}>
+                    {photoModalExpense.type === "income" ? "+" : "-"}
+                    {formatAmount(photoModalExpense.amount)}
+                  </p>
+                </div>
+
+                <div className="space-y-3 text-sm">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Date</p>
+                    <p className="font-bold text-foreground">{format(parseISO(photoModalExpense.date), "dd MMM yyyy")}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Category</p>
+                    <p className="font-bold text-foreground">
+                      {categories.find((c) => c.id === photoModalExpense.categoryId)?.name || photoModalExpense.categoryId}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Description</p>
+                    <p className="font-bold text-foreground wrap-break-word">
+                      {photoModalExpense.note || photoModalExpense.merchant || "N/A"}
+                    </p>
+                  </div>
+                  {photoModalExpense.reference && (
+                    <div>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Reference</p>
+                      <p className="font-bold text-foreground">{photoModalExpense.reference}</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-3 border-t border-border grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => {
+                      showTransactionModal(photoModalExpense);
+                      closePhotoModal();
+                    }}
+                    className="py-3 rounded-xl bg-primary text-primary-foreground font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2"
+                  >
+                    <Edit2 className="h-4 w-4" />
+                    Edit Expense
+                  </button>
+                  <button
+                    onClick={closePhotoModal}
+                    className="py-3 rounded-xl border border-border font-black text-xs uppercase tracking-widest hover:bg-accent transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
