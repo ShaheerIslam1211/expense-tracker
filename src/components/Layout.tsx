@@ -58,12 +58,12 @@ export default function Layout() {
     );
 
   return (
-    <div className="min-h-screen md:h-screen bg-background flex flex-col md:flex-row relative overflow-x-hidden md:overflow-hidden">
+    <div className="min-h-dvh md:h-screen bg-background flex flex-col md:flex-row relative overflow-x-hidden md:overflow-hidden">
       {/* Mobile Header */}
       <header
         className={cn(
           "md:hidden z-50 w-full bg-background/80 backdrop-blur-lg border-b border-border px-4 flex items-center justify-between",
-          settings.mobileNavbarFixed ? "sticky top-0 py-4" : "relative py-3",
+          settings.mobileNavbarFixed ? "sticky top-0 py-4 safe-top" : "relative py-3 safe-top",
         )}
       >
         <h1 className="text-xl font-bold bg-linear-to-r from-primary to-primary/60 bg-clip-text text-transparent">
@@ -193,7 +193,7 @@ export default function Layout() {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 md:pl-64">
-        <div className="flex-1 md:overflow-y-auto pb-24 md:pb-8">
+        <div className="flex-1 md:overflow-y-auto pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-8">
           <div className={cn("max-w-6xl mx-auto px-4 sm:px-6 lg:px-8", settings.compactLayout ? "py-5" : "py-8")}>
             <Outlet />
           </div>
@@ -204,7 +204,7 @@ export default function Layout() {
       {settings.showFloatingAddButton && (
         <button
           onClick={() => showTransactionModal()}
-          className="fixed bottom-24 right-6 md:bottom-8 md:right-8 bg-primary text-primary-foreground p-5 rounded-3xl shadow-2xl shadow-primary/40 hover:scale-110 active:scale-95 transition-all z-40"
+          className="fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] right-6 md:bottom-8 md:right-8 bg-primary text-primary-foreground p-5 rounded-3xl shadow-2xl shadow-primary/40 hover:scale-110 active:scale-95 transition-all z-40"
           aria-label="Add transaction"
         >
           <Plus className="h-8 w-8 stroke-3" />

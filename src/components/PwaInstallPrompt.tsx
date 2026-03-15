@@ -22,10 +22,17 @@ export function PwaInstallPrompt() {
   const [showPrompt, setShowPrompt] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
 
-  const isIOS = useMemo(
-    () => /iphone|ipad|ipod/i.test(navigator.userAgent) && !/CriOS|FxiOS/i.test(navigator.userAgent),
-    [],
-  );
+  const isIOSDevice = useMemo(() => {
+    const ua = navigator.userAgent;
+    const iOSUA = /iphone|ipad|ipod/i.test(ua);
+    // iPadOS can report itself as Mac.
+    const iPadOS = /Macintosh/i.test(ua) && navigator.maxTouchPoints > 1;
+    return iOSUA || iPadOS;
+  }, []);
+  const isIOSSafari = useMemo(() => {
+    const ua = navigator.userAgent;
+    return isIOSDevice && /Safari/i.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS|DuckDuckGo/i.test(ua);
+  }, [isIOSDevice]);
   const isMobile = useMemo(() => window.matchMedia?.("(max-width: 768px)").matches ?? false, []);
 
   useEffect(() => {
@@ -53,8 +60,8 @@ export function PwaInstallPrompt() {
     window.addEventListener("beforeinstallprompt", onBeforeInstallPrompt);
     window.addEventListener("appinstalled", onInstalled);
 
-    // iOS Safari has no beforeinstallprompt event; show manual install hint.
-    if (isIOS && !isStandaloneMode()) {
+    // iOS has no beforeinstallprompt event; show manual install hint.
+    if (isIOSDevice && !isStandaloneMode()) {
       setShowPrompt(true);
     }
 
@@ -62,7 +69,7 @@ export function PwaInstallPrompt() {
       window.removeEventListener("beforeinstallprompt", onBeforeInstallPrompt);
       window.removeEventListener("appinstalled", onInstalled);
     };
-  }, [isInstalled, isIOS]);
+  }, [isInstalled, isIOSDevice]);
 
   const dismiss = () => {
     localStorage.setItem(PWA_PROMPT_DISMISS_KEY, String(Date.now()));
@@ -82,7 +89,7 @@ export function PwaInstallPrompt() {
   if (!showPrompt || isInstalled) return null;
 
   return (
-    <div className="fixed z-50 bottom-5 left-1/2 -translate-x-1/2 w-[calc(100%-1rem)] sm:w-auto sm:min-w-[360px] max-w-[540px]">
+    <div className="fixed z-50 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] left-1/2 -translate-x-1/2 w-[calc(100%-1rem)] sm:w-auto sm:min-w-[360px] max-w-[540px]">
       <div className="bg-card border border-border rounded-2xl shadow-2xl backdrop-blur-md p-4 sm:p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -122,8 +129,19 @@ export function PwaInstallPrompt() {
             </div>
           ) : (
             <div className="text-xs text-muted-foreground font-medium leading-relaxed bg-accent/20 border border-border rounded-xl p-3">
-              <span className="font-black text-foreground">iPhone/iPad:</span> Tap <Share2 className="inline h-3.5 w-3.5" />{" "}
-              then choose <span className="font-black text-foreground">Add to Home Screen</span>.
+              {isIOSSafari ? (
+                <>
+                  <span className="font-black text-foreground">iPhone/iPad:</span> Tap{" "}
+                  <Share2 className="inline h-3.5 w-3.5" /> then choose{" "}
+                  <span className="font-black text-foreground">Add to Home Screen</span>.
+                </>
+              ) : (
+                <>
+                  <span className="font-black text-foreground">Install on iPhone:</span> Open this app in{" "}
+                  <span className="font-black text-foreground">Safari</span>, tap <Share2 className="inline h-3.5 w-3.5" />{" "}
+                  and choose <span className="font-black text-foreground">Add to Home Screen</span>.
+                </>
+              )}
             </div>
           )}
         </div>

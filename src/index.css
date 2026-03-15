@@ -139,7 +139,7 @@ body {
 }
 
 #root {
-  min-height: 100vh;
+  min-height: 100dvh;
 }
 
 /* Smooth transitions for all interactive elements */
@@ -173,4 +173,14 @@ button, a, input, select, textarea {
 
 .safe-top {
   padding-top: env(safe-area-inset-top);
+}
+
+/* Prevent iOS Safari zooming form controls */
+@media (max-width: 768px) {
+  input,
+  select,
+  textarea,
+  button {
+    font-size: 16px;
+  }
 }
