@@ -30,30 +30,12 @@ import { cn } from "../utils/cn";
 import { useCurrency } from "../hooks/useCurrency";
 import type { Expense } from "../types";
 import { useAppSettings } from "../context/AppSettingsContext";
+import { useToast } from "../context/ToastContext";
 import { useSensitiveMode } from "../hooks/useSensitiveMode";
 import { resizeDataUrl } from "../utils/imageResize";
 import { getCountries, getCountryCallingCode, type CountryCode } from "libphonenumber-js";
 import Cropper, { type Area, type Point } from "react-easy-crop";
 import { useModalBehavior } from "../hooks/useModalBehavior";
-
-const OPENAI_KEY_STORAGE = "expense-tracker-openai-key";
-
-function loadStoredApiKey(): string {
-  try {
-    return localStorage.getItem(OPENAI_KEY_STORAGE) ?? "";
-  } catch {
-    return "";
-  }
-}
-
-function saveApiKey(key: string) {
-  try {
-    if (key.trim()) localStorage.setItem(OPENAI_KEY_STORAGE, key.trim());
-    else localStorage.removeItem(OPENAI_KEY_STORAGE);
-  } catch {
-    // ignore
-  }
-}
 
 function toCountryCode(input?: string): CountryCode | "" {
   if (!input) return "";
@@ -99,12 +81,12 @@ export default function Settings() {
   const { expenses: allExpenses } = useExpenses();
   const { theme: currentTheme, actualTheme, setTheme } = useTheme();
   const [budgetInput, setBudgetInput] = useState(String(monthlyBudget));
-  const [apiKey, setApiKey] = useState(loadStoredApiKey);
   const [saved, setSaved] = useState(false);
   const { categories, deleteCategory, addCategory } = useCategories();
   const { savingsGoals, addSavingsGoal, deleteSavingsGoal } = useSavings();
   const { settings, updateSettings, resetSettings, applyPreset, exportSettings, importSettings } = useAppSettings();
   const { hideSensitiveValues, toggleSensitiveValues } = useSensitiveMode();
+  const { showToast } = useToast();
 
   // Profile state
   const [profileName, setProfileName] = useState(userData?.name || "");
@@ -260,12 +242,18 @@ export default function Settings() {
 
   const handleAddCategory = async () => {
     if (!newCatName.trim()) return;
-    await addCategory({
-      name: newCatName.trim(),
-      icon: newCatIcon,
-      color: newCatColor,
-    });
-    setNewCatName("");
+    try {
+      await addCategory({
+        name: newCatName.trim(),
+        icon: newCatIcon,
+        color: newCatColor,
+      });
+      setNewCatName("");
+      showToast("Category added", "success");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to add category";
+      showToast(message, "error");
+    }
   };
 
   const handleAddGoal = async () => {
@@ -282,8 +270,9 @@ export default function Settings() {
     setNewGoalTarget("");
   };
 
-  const handleSaveApiKey = () => {
-    saveApiKey(apiKey);
+  const handleSaveSystemConfig = async () => {
+    const n = parseInt(budgetInput, 10);
+    await setMonthlyBudget(Number.isFinite(n) && n >= 0 ? n : 0);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
@@ -754,29 +743,19 @@ export default function Settings() {
                     type="number"
                     value={budgetInput}
                     onChange={(e) => setBudgetInput(e.target.value)}
-                    onBlur={() => setMonthlyBudget(parseInt(budgetInput) || 0)}
+                    onBlur={() => void setMonthlyBudget(parseInt(budgetInput, 10) || 0)}
                     className="w-full bg-accent/50 border border-border rounded-xl px-4 py-3 font-bold focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-foreground"
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-xs font-black text-muted-foreground uppercase tracking-widest ml-1">
-                    OpenAI API Key (Optional)
-                  </label>
-                  <input
-                    type="password"
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                    className="w-full bg-accent/50 border border-border rounded-xl px-4 py-3 font-bold focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all text-foreground"
-                    placeholder="sk-..."
-                  />
-                  <p className="text-[10px] text-muted-foreground font-medium px-1">
-                    Used for smart receipt scanning and AI insights.
-                  </p>
-                </div>
+                <p className="text-[10px] text-muted-foreground font-medium px-1">
+                  Budget syncs to your account. Receipt OCR uses your deployed backend (
+                  <code className="text-xs">VITE_OCR_API_URL</code>); do not store API secrets in the browser.
+                </p>
 
                 <div className="flex justify-end pt-4 gap-4">
                   <button
+                    type="button"
                     onClick={exportToCSV}
                     className="flex items-center gap-2 bg-accent/30 text-foreground px-6 py-3 rounded-xl font-black border border-border hover:bg-accent/50 transition-all"
                   >
@@ -784,11 +763,12 @@ export default function Settings() {
                     Export CSV
                   </button>
                   <button
-                    onClick={handleSaveApiKey}
+                    type="button"
+                    onClick={() => void handleSaveSystemConfig()}
                     className="flex items-center gap-2 bg-primary text-primary-foreground px-6 py-3 rounded-xl font-black shadow-lg shadow-primary/20 hover:scale-105 transition-all"
                   >
                     {saved ? <Check className="h-5 w-5" /> : <Save className="h-5 w-5" />}
-                    Save Config
+                    Save budget
                   </button>
                 </div>
 
@@ -986,6 +966,45 @@ export default function Settings() {
                     >
                       Compact Layout: {settings.compactLayout ? "On" : "Off"}
                     </button>
+                  </div>
+
+                  <div className="rounded-2xl border border-border bg-accent/10 p-4 space-y-3">
+                    <div>
+                      <h4 className="text-sm font-black text-foreground">Modals and overlays</h4>
+                      <p className="text-[11px] text-muted-foreground mt-1 leading-relaxed">
+                        Applies to transaction dialogs, savings goals, card forms, and receipt previews. Preferences
+                        sync to your account when you are signed in (same as other advanced options).
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => updateSettings({ modalLockBackgroundScroll: !settings.modalLockBackgroundScroll })}
+                        className={cn(
+                          "px-4 py-3 rounded-xl border text-xs font-black uppercase tracking-widest transition-all text-left",
+                          settings.modalLockBackgroundScroll
+                            ? "bg-primary/10 border-primary text-primary"
+                            : "bg-accent/30 border-border text-muted-foreground",
+                        )}
+                      >
+                        Lock background scroll: {settings.modalLockBackgroundScroll ? "On" : "Off"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateSettings({ modalBackdropBlur: !settings.modalBackdropBlur })}
+                        className={cn(
+                          "px-4 py-3 rounded-xl border text-xs font-black uppercase tracking-widest transition-all text-left",
+                          settings.modalBackdropBlur
+                            ? "bg-primary/10 border-primary text-primary"
+                            : "bg-accent/30 border-border text-muted-foreground",
+                        )}
+                      >
+                        Backdrop blur: {settings.modalBackdropBlur ? "On" : "Off"}
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground font-medium">
+                      Backdrop blur is turned off automatically while &quot;Reduced motion&quot; is on.
+                    </p>
                   </div>
 
                   <div className="flex flex-wrap justify-end gap-3 pt-1">

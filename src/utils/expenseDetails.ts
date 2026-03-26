@@ -89,9 +89,30 @@ export const LAB_TEST_OPTIONS: DetailOption[] = [
   { value: "vitamin-b12", label: "Vitamin B12" },
 ];
 
+export const BIKE_REPAIR_OPTIONS: DetailOption[] = [
+  { value: "clutch-wire", label: "Clutch Wire Repair/Change" },
+  { value: "engine-oil", label: "Engine Oil Change" },
+  { value: "brake-shoe", label: "Brake Shoe Change" },
+  { value: "hub-change", label: "Hub Change" },
+  { value: "meter-light", label: "Meter Light Change" },
+  { value: "spark-plug", label: "Spark Plug Change" },
+  { value: "air-filter", label: "Air Filter Change" },
+  { value: "chain-sprocket", label: "Chain Sprocket Service" },
+  { value: "carburetor-clean", label: "Carburetor Cleaning" },
+  { value: "battery-service", label: "Battery Service/Replacement" },
+  { value: "brake-oil", label: "Brake Oil Top-up" },
+  { value: "tyre-puncture", label: "Tyre Puncture Repair" },
+  { value: "tyre-change", label: "Tyre/Tube Change" },
+  { value: "fork-service", label: "Front Fork Service" },
+  { value: "general-service", label: "General Service" },
+  { value: "washing-polish", label: "Wash & Polish" },
+];
+
 export function buildDetailsSummary(details: ExpenseAdvancedDetails) {
   const labTestLabels =
     details.labTests?.map((value) => LAB_TEST_OPTIONS.find((option) => option.value === value)?.label ?? value) ?? [];
+  const bikeRepairLabels =
+    details.repairTasks?.map((value) => BIKE_REPAIR_OPTIONS.find((option) => option.value === value)?.label ?? value) ?? [];
   const parts = [
     details.subCategory,
     details.itemType,
@@ -100,8 +121,23 @@ export function buildDetailsSummary(details: ExpenseAdvancedDetails) {
     details.billType,
     details.packageType,
     details.quantity && details.unit ? `${details.quantity} ${details.unit}` : details.quantity,
+    bikeRepairLabels.length ? `Bike: ${bikeRepairLabels.join(", ")}` : "",
+    details.customRepairTask,
     labTestLabels.length ? `Tests: ${labTestLabels.join(", ")}` : "",
     details.customLabTest,
   ].filter(Boolean);
   return parts.join(" • ");
+}
+
+export function isBikeRepairCategory(categoryId: string, categoryName?: string) {
+  const id = categoryId.toLowerCase();
+  const name = (categoryName ?? "").toLowerCase();
+  const source = `${id} ${name}`;
+  return (
+    source.includes("bike repair") ||
+    source.includes("bike-repair") ||
+    source.includes("bikerepair") ||
+    source.includes("bike service") ||
+    source.includes("bike-service")
+  );
 }

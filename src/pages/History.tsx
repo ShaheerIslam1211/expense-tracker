@@ -26,6 +26,8 @@ import { cn } from "../utils/cn";
 import { exportToCSV, exportToPDF } from "../utils/export";
 import { useModal } from "../context/ModalContext";
 import { useModalBehavior } from "../hooks/useModalBehavior";
+import { useAppSettings } from "../context/AppSettingsContext";
+import { modalBackdropBlurClass } from "../utils/modalBackdrop";
 
 function ExpenseRow({
   expense,
@@ -156,6 +158,7 @@ export default function History() {
   const { categories } = useCategories();
   const { cards } = useCards();
   const { formatAmount } = useCurrency();
+  const { settings } = useAppSettings();
   useModalBehavior(Boolean(photoModalExpense), closePhotoModal);
 
   const expenses = allExpenses
@@ -449,7 +452,10 @@ export default function History() {
         typeof document !== "undefined" &&
         createPortal(
         <div
-          className="fixed inset-0 z-60 bg-black/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-6"
+          className={cn(
+            "fixed inset-0 z-60 bg-black/80 flex items-center justify-center p-2 sm:p-6",
+            modalBackdropBlurClass(settings.modalBackdropBlur, settings.reducedMotion),
+          )}
           onClick={closePhotoModal}
         >
           <div

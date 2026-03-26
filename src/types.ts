@@ -73,6 +73,8 @@ export interface ExpenseAdvancedDetails {
   dosagePlan?: string;
   inspectionType?: string;
   routeType?: string;
+  repairTasks?: string[];
+  customRepairTask?: string;
   labTests?: string[];
   customLabTest?: string;
   reports?: Array<{
@@ -128,6 +130,8 @@ export interface UserData {
   currency?: string;
   theme?: "light" | "dark" | "system";
   hideSensitiveValues?: boolean;
+  /** Monthly budget in profile currency; synced across devices when set. */
+  monthlyBudget?: number;
   appSettings?: {
     defaultTransactionType?: TransactionType;
     defaultPaymentMethodType?: PaymentMethodType;
@@ -140,6 +144,8 @@ export interface UserData {
     showPwaInstallPrompt?: boolean;
     showSidebarTipCard?: boolean;
     compactLayout?: boolean;
+    modalLockBackgroundScroll?: boolean;
+    modalBackdropBlur?: boolean;
   };
   createdAt: string;
 }

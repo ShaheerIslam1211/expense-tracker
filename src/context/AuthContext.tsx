@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   GoogleAuthProvider,
   createUserWithEmailAndPassword,
@@ -13,6 +13,7 @@ import {
 import { doc, setDoc } from "firebase/firestore";
 import { auth, db } from "../firebase";
 import type { UserData } from "../types";
+import { DEFAULT_MONTHLY_BUDGET } from "../constants/budget";
 
 interface AuthContextValue {
   user: User | null;
@@ -36,15 +37,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let unsubFirestore: (() => void) | undefined;
 
     const unsubAuth = onAuthStateChanged(auth, async (u) => {
+      if (unsubFirestore) {
+        unsubFirestore();
+        unsubFirestore = undefined;
+      }
+
       setUser(u);
 
       if (u) {
-        // Listen to user data in Firestore
         const { onSnapshot } = await import("firebase/firestore");
         unsubFirestore = onSnapshot(doc(db, "users", u.uid), (snap) => {
           if (snap.exists()) {
             const data = snap.data() as UserData;
             setUserData(data);
+          } else {
+            setUserData(null);
           }
         });
       } else {
@@ -60,7 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const signUp: AuthContextValue["signUp"] = async ({ name, age, email, password }) => {
+  const signUp = useCallback(async ({ name, age, email, password }: { name: string; age: number; email: string; password: string }) => {
     const cred = await createUserWithEmailAndPassword(auth, email, password);
     if (name) {
       await updateProfile(cred.user, { displayName: name });
@@ -72,15 +79,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       currency: "USD",
       theme: "system",
       hideSensitiveValues: true,
+      monthlyBudget: DEFAULT_MONTHLY_BUDGET,
       createdAt: new Date().toISOString(),
     });
-  };
+  }, []);
 
-  const signIn: AuthContextValue["signIn"] = async (email, password) => {
+  const signIn = useCallback(async (email: string, password: string) => {
     await signInWithEmailAndPassword(auth, email, password);
-  };
+  }, []);
 
-  const signInWithGoogle: AuthContextValue["signInWithGoogle"] = async () => {
+  const signInWithGoogle = useCallback(async () => {
     const provider = new GoogleAuthProvider();
     const cred: UserCredential = await signInWithPopup(auth, provider);
     const isNewUser =
@@ -92,30 +100,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         currency: "USD",
         theme: "system",
         hideSensitiveValues: true,
+        monthlyBudget: DEFAULT_MONTHLY_BUDGET,
         createdAt: new Date().toISOString(),
       });
     }
-  };
+  }, []);
 
-  const updateUserProfile = async (updates: Partial<UserData>) => {
-    if (!user) return;
-    const cleanUpdates = Object.fromEntries(
-      Object.entries(updates).filter(([, v]) => v !== undefined),
-    ) as Record<string, unknown>;
-    await setDoc(doc(db, "users", user.uid), cleanUpdates, { merge: true });
+  const updateUserProfile = useCallback(
+    async (updates: Partial<UserData>) => {
+      if (!user) return;
+      const cleanUpdates = Object.fromEntries(
+        Object.entries(updates).filter(([, v]) => v !== undefined),
+      ) as Record<string, unknown>;
+      await setDoc(doc(db, "users", user.uid), cleanUpdates, { merge: true });
 
-    if (updates.name) {
-      await updateProfile(user, { displayName: updates.name });
-    }
-    if ("photoUrl" in updates) {
-      const nextPhotoUrl = updates.photoUrl?.trim();
-      await updateProfile(user, { photoURL: nextPhotoUrl || null });
-    }
-  };
+      if (updates.name) {
+        await updateProfile(user, { displayName: updates.name });
+      }
+      if ("photoUrl" in updates) {
+        const nextPhotoUrl = updates.photoUrl?.trim();
+        await updateProfile(user, { photoURL: nextPhotoUrl || null });
+      }
+    },
+    [user],
+  );
 
-  const signOut = async () => {
+  const signOut = useCallback(async () => {
     await firebaseSignOut(auth);
-  };
+  }, []);
 
   const value = useMemo(
     () => ({
@@ -128,7 +140,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signOut,
       updateUserProfile,
     }),
-    [user, userData, loading],
+    [user, userData, loading, signUp, signIn, signInWithGoogle, signOut, updateUserProfile],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

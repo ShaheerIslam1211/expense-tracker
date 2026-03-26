@@ -1,6 +1,7 @@
 /**
  * Receipt parsing – strict filtering to avoid OCR noise
  */
+/* eslint-disable no-useless-escape -- regex literals; escapes kept for delimiter clarity */
 import type { CategoryId } from '../types'
 import { suggestCategory } from './autoCategorize'
 

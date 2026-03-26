@@ -54,7 +54,7 @@ export default function Insights() {
   const now = new Date();
   const start = new Date(year, 0, 1);
   const end = year === now.getFullYear() ? now : new Date(year, 11, 31);
-  let cursor = new Date(start);
+  const cursor = new Date(start);
   let currentNoSpendStreak = 0;
   let longestNoSpendStreak = 0;
   let runningStreak = 0;

@@ -9,7 +9,14 @@ import { type CategoryId, type FuelInfo, type PaymentMethodType, type ExpenseAdv
 import { useCards } from "../context/CardContext";
 import { useToast } from "../context/ToastContext";
 import { resizeImage, needsResizing, resizeDataUrl } from "../utils/imageResize";
-import { DETAIL_SUBCATEGORY_OPTIONS, FOOD_ITEM_TYPES, LAB_TEST_OPTIONS, buildDetailsSummary } from "../utils/expenseDetails";
+import {
+  DETAIL_SUBCATEGORY_OPTIONS,
+  FOOD_ITEM_TYPES,
+  LAB_TEST_OPTIONS,
+  BIKE_REPAIR_OPTIONS,
+  buildDetailsSummary,
+  isBikeRepairCategory,
+} from "../utils/expenseDetails";
 
 export default function EditExpense() {
   const { id } = useParams<{ id: string }>();
@@ -57,6 +64,15 @@ export default function EditExpense() {
     });
   };
 
+  const toggleBikeRepairTask = (taskValue: string) => {
+    setDetails((prev) => {
+      const current = prev.repairTasks ?? [];
+      const exists = current.includes(taskValue);
+      const next = exists ? current.filter((t) => t !== taskValue) : [...current, taskValue];
+      return { ...prev, repairTasks: next };
+    });
+  };
+
   const supportsAdvancedDetails = Boolean(DETAIL_SUBCATEGORY_OPTIONS[categoryId]?.length);
   const isFoodGrocery = categoryId === "food" && details.subCategory === "groceries";
   const isCookingOil = isFoodGrocery && details.itemType === "cooking-oil";
@@ -65,6 +81,8 @@ export default function EditExpense() {
   const isBillsMobilePackage = categoryId === "bills" && details.subCategory === "mobile-package";
   const isDadInspectorVisit = categoryId === "dad" && details.subCategory === "inspector-visit";
   const isTransportRideApp = categoryId === "transport" && ["indrive", "yango", "uber-careem"].includes(details.subCategory ?? "");
+  const selectedCategoryName = categories.find((c) => c.id === categoryId)?.name;
+  const isSelectedBikeRepairCategory = isBikeRepairCategory(categoryId, selectedCategoryName);
 
   useEffect(() => {
     if (expense) {
@@ -91,14 +109,19 @@ export default function EditExpense() {
 
   useEffect(() => {
     const options = DETAIL_SUBCATEGORY_OPTIONS[categoryId] ?? [];
+    const selectedName = categories.find((c) => c.id === categoryId)?.name;
     if (options.length === 0) {
-      if (Object.keys(details).length > 0) setDetails({});
+      if (isBikeRepairCategory(categoryId, selectedName)) return;
+      setDetails({});
       return;
     }
-    if (!details.subCategory || !options.some((option) => option.value === details.subCategory)) {
-      setDetails((prev) => ({ ...prev, subCategory: options[0].value }));
-    }
-  }, [categoryId, details]);
+    setDetails((prev) => {
+      if (!prev.subCategory || !options.some((option) => option.value === prev.subCategory)) {
+        return { ...prev, subCategory: options[0].value };
+      }
+      return prev;
+    });
+  }, [categoryId, categories]);
 
   const handleDetailReportUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files ?? []);
@@ -174,6 +197,7 @@ export default function EditExpense() {
 
     const normalizedDetails: ExpenseAdvancedDetails = {
       ...Object.fromEntries(Object.entries(details).filter(([, value]) => typeof value === "string" && value.trim().length > 0)),
+      ...(details.repairTasks?.length ? { repairTasks: details.repairTasks } : {}),
       ...(details.labTests?.length ? { labTests: details.labTests } : {}),
       ...(details.reports?.length ? { reports: details.reports } : {}),
     };
@@ -329,6 +353,8 @@ export default function EditExpense() {
                     packageType: undefined,
                     inspectionType: undefined,
                     routeType: undefined,
+                    repairTasks: undefined,
+                    customRepairTask: undefined,
                     labTests: undefined,
                     customLabTest: undefined,
                   })
@@ -534,6 +560,38 @@ export default function EditExpense() {
                 )}
               </div>
             )}
+          </div>
+        )}
+
+        {isSelectedBikeRepairCategory && (
+          <div className="rounded-xl bg-[var(--surface)] border border-[var(--border)] p-4 space-y-2">
+            <p className="text-sm font-medium">Bike repair tasks (tap to select multiple)</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {BIKE_REPAIR_OPTIONS.map((task) => {
+                const active = details.repairTasks?.includes(task.value) ?? false;
+                return (
+                  <button
+                    key={task.value}
+                    type="button"
+                    onClick={() => toggleBikeRepairTask(task.value)}
+                    className={`px-3 py-2 rounded-lg border text-left text-sm touch-manipulation ${
+                      active
+                        ? "border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]"
+                        : "border-[var(--border)] bg-[var(--bg)]"
+                    }`}
+                  >
+                    {task.label}
+                  </button>
+                );
+              })}
+            </div>
+            <input
+              type="text"
+              value={details.customRepairTask ?? ""}
+              onChange={(e) => updateDetails({ customRepairTask: e.target.value })}
+              className="w-full px-3 py-2 rounded-lg bg-[var(--bg)] border border-[var(--border)]"
+              placeholder="Other bike repair task (optional)"
+            />
           </div>
         )}
 

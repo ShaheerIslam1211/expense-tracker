@@ -30,12 +30,21 @@ import { resizeDataUrl } from "../utils/imageResize";
 import type {
   Expense,
   CategoryId,
+  FuelInfo,
   PaymentMethodType,
   TransactionType,
   RecurringFrequency,
   ExpenseAdvancedDetails,
 } from "../types";
-import { DETAIL_SUBCATEGORY_OPTIONS, FOOD_ITEM_TYPES, LAB_TEST_OPTIONS, buildDetailsSummary } from "../utils/expenseDetails";
+import {
+  DETAIL_SUBCATEGORY_OPTIONS,
+  FOOD_ITEM_TYPES,
+  LAB_TEST_OPTIONS,
+  BIKE_REPAIR_OPTIONS,
+  buildDetailsSummary,
+  isBikeRepairCategory,
+} from "../utils/expenseDetails";
+import { modalBackdropBlurClass } from "../utils/modalBackdrop";
 
 interface TransactionModalProps {
   isOpen: boolean;
@@ -66,6 +75,12 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
   const [scanProgress, setScanProgress] = useState(0);
   const [paymentMethodType, setPaymentMethodType] = useState<PaymentMethodType>("cash");
   const [paymentMethodId, setPaymentMethodId] = useState("");
+  const [fuel, setFuel] = useState<FuelInfo>({
+    volumeLiters: undefined,
+    pricePerLiter: undefined,
+    odometerKm: undefined,
+    fuelType: "petrol",
+  });
   const [isRecurring, setIsRecurring] = useState(false);
   const [frequency, setFrequency] = useState<RecurringFrequency>("monthly");
   const [details, setDetails] = useState<ExpenseAdvancedDetails>({});
@@ -98,6 +113,14 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
       setPhotoDataUrl(editingTransaction.photoDataUrl);
       setPaymentMethodType(editingTransaction.paymentMethodType);
       setPaymentMethodId(editingTransaction.paymentMethodId || "");
+      setFuel(
+        editingTransaction.fuel ?? {
+          volumeLiters: undefined,
+          pricePerLiter: undefined,
+          odometerKm: undefined,
+          fuelType: "petrol",
+        },
+      );
       setIsRecurring(editingTransaction.recurring?.isRecurring || false);
       setFrequency(editingTransaction.recurring?.frequency || "monthly");
       setDetails(editingTransaction.details || {});
@@ -114,6 +137,12 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
       setPaymentMethodType(settings.defaultPaymentMethodType);
       if (settings.defaultPaymentMethodType === "card" && cards.length > 0) setPaymentMethodId(cards[0].id);
       else setPaymentMethodId("");
+      setFuel({
+        volumeLiters: undefined,
+        pricePerLiter: undefined,
+        odometerKm: undefined,
+        fuelType: "petrol",
+      });
       setIsRecurring(false);
       setFrequency("monthly");
       setDetails({});
@@ -125,20 +154,34 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
     setScanProgress(0);
   }, [editingTransaction, isOpen, settings.defaultTransactionType, settings.defaultPaymentMethodType, cards]);
 
+  const isFuelCategory = type === "expense" && categoryId === "fuel";
+  const amountNumber = Number(amount);
+  const computedFuelLiters =
+    isFuelCategory && fuel.pricePerLiter && fuel.pricePerLiter > 0 && amountNumber > 0
+      ? Number((amountNumber / fuel.pricePerLiter).toFixed(3))
+      : undefined;
+
+  useEffect(() => {
+    if (!isFuelCategory || computedFuelLiters == null) return;
+    if (fuel.volumeLiters === computedFuelLiters) return;
+    setFuel((prev) => ({ ...prev, volumeLiters: computedFuelLiters }));
+  }, [computedFuelLiters, fuel.volumeLiters, isFuelCategory]);
+
   useEffect(() => {
     const validOptions = DETAIL_SUBCATEGORY_OPTIONS[categoryId] ?? [];
+    const selectedName = categories.find((c) => c.id === categoryId)?.name;
     if (validOptions.length === 0) {
-      if (Object.keys(details).length > 0) setDetails({});
+      if (isBikeRepairCategory(categoryId, selectedName)) return;
+      setDetails({});
       return;
     }
-    if (!details.subCategory || !validOptions.some((option) => option.value === details.subCategory)) {
-      const nextSubCategory = validOptions[0].value;
-      setDetails((prev) => ({
-        ...prev,
-        subCategory: nextSubCategory,
-      }));
-    }
-  }, [categoryId, details]);
+    setDetails((prev) => {
+      if (!prev.subCategory || !validOptions.some((option) => option.value === prev.subCategory)) {
+        return { ...prev, subCategory: validOptions[0].value };
+      }
+      return prev;
+    });
+  }, [categoryId, categories]);
 
   useEffect(() => {
     if (filteredCategories.length === 0) return;
@@ -157,20 +200,15 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
     }
     setIsAddingCategory(true);
     try {
-      await addCategory({ name, icon: newCategoryIcon, color: newCategoryColor });
-      const generatedId =
-        name
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, "-")
-          .replace(/^-+|-+$/g, "")
-          .slice(0, 40) || `cat-${Date.now()}`;
-      setCategoryId(generatedId);
+      const newId = await addCategory({ name, icon: newCategoryIcon, color: newCategoryColor });
+      setCategoryId(newId);
       setShowAddCategory(false);
       setNewCategoryName("");
       showToast("Category added", "success");
     } catch (error) {
       console.error("Failed to add category:", error);
-      showToast("Failed to add category", "error");
+      const message = error instanceof Error ? error.message : "Failed to add category";
+      showToast(message, "error");
     } finally {
       setIsAddingCategory(false);
     }
@@ -253,6 +291,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
   const isBillsMobilePackage = categoryId === "bills" && details.subCategory === "mobile-package";
   const isDadInspectorVisit = categoryId === "dad" && details.subCategory === "inspector-visit";
   const isTransportRideApp = categoryId === "transport" && ["indrive", "yango", "uber-careem"].includes(details.subCategory ?? "");
+  const selectedCategoryName = categories.find((cat) => cat.id === categoryId)?.name;
+  const isSelectedBikeRepairCategory = type === "expense" && isBikeRepairCategory(categoryId, selectedCategoryName);
   const isHealthInsulin = categoryId === "health" && (details.subCategory?.startsWith("insulin") ?? false);
   const isHealthLabTest = categoryId === "health" && details.subCategory === "lab-test";
 
@@ -266,6 +306,15 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
       const exists = current.includes(testValue);
       const next = exists ? current.filter((t) => t !== testValue) : [...current, testValue];
       return { ...prev, labTests: next };
+    });
+  };
+
+  const toggleBikeRepairTask = (taskValue: string) => {
+    setDetails((prev) => {
+      const current = prev.repairTasks ?? [];
+      const exists = current.includes(taskValue);
+      const next = exists ? current.filter((t) => t !== taskValue) : [...current, taskValue];
+      return { ...prev, repairTasks: next };
     });
   };
 
@@ -331,6 +380,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
           ...Object.fromEntries(
             Object.entries(details).filter(([, value]) => typeof value === "string" && value.trim().length > 0),
           ),
+          ...(details.repairTasks?.length ? { repairTasks: details.repairTasks } : {}),
           ...(details.labTests?.length ? { labTests: details.labTests } : {}),
           ...(details.reports?.length ? { reports: details.reports } : {}),
         } as ExpenseAdvancedDetails)
@@ -352,6 +402,13 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
       paymentMethodType,
       paymentMethodId: paymentMethodType === "card" ? paymentMethodId : undefined,
     };
+
+    if (isFuelCategory && (fuel.pricePerLiter || fuel.volumeLiters || fuel.odometerKm)) {
+      transactionData.fuel = {
+        ...fuel,
+        volumeLiters: computedFuelLiters ?? fuel.volumeLiters,
+      };
+    }
 
     if (isRecurring) {
       transactionData.recurring = {
@@ -387,19 +444,23 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={{ duration: 0.15, ease: "easeOut" }}
             onClick={onClose}
-            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+            className={cn(
+              "fixed inset-0 bg-black/60 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4",
+              modalBackdropBlurClass(settings.modalBackdropBlur, settings.reducedMotion),
+            )}
           />
 
           {/* Modal Container */}
           <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 pointer-events-none">
             {/* Modal */}
             <motion.div
-              initial={{ y: "100%", opacity: 1, scale: 1 }}
-              animate={{ y: 0, opacity: 1, scale: 1 }}
-              exit={{ y: "100%", opacity: 1, scale: 1 }}
-              transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="w-full max-w-2xl bg-background border-t sm:border border-border rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] pointer-events-auto"
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "tween", duration: 0.2, ease: [0.32, 0.72, 0, 1] }}
+              className="w-full max-w-2xl bg-background border-t sm:border border-border rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] pointer-events-auto will-change-transform transform-gpu"
             >
               {/* Header */}
               <div className="p-4 sm:p-6 flex items-center justify-between border-b border-border bg-card">
@@ -568,6 +629,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
                               quantity: undefined,
                               unit: undefined,
                               dosagePlan: undefined,
+                              repairTasks: undefined,
+                              customRepairTask: undefined,
                               labTests: undefined,
                               customLabTest: undefined,
                             })
@@ -836,6 +899,44 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
                   </div>
                 )}
 
+                {isSelectedBikeRepairCategory && (
+                  <div className="p-4 rounded-2xl border border-border bg-accent/20 space-y-3">
+                    <label className="text-[11px] font-black uppercase tracking-wider text-muted-foreground">
+                      Bike repair tasks (tap to select multiple)
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {BIKE_REPAIR_OPTIONS.map((task) => {
+                        const active = details.repairTasks?.includes(task.value) ?? false;
+                        return (
+                          <button
+                            key={task.value}
+                            type="button"
+                            onClick={() => toggleBikeRepairTask(task.value)}
+                            className={cn(
+                              "px-3 py-2.5 rounded-xl border text-xs font-black uppercase tracking-wider text-left transition-all touch-manipulation",
+                              active
+                                ? "bg-primary/10 border-primary text-primary"
+                                : "bg-card border-border text-muted-foreground hover:bg-accent",
+                            )}
+                          >
+                            {task.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">
+                      Pick all services done in this repair visit.
+                    </p>
+                    <input
+                      type="text"
+                      value={details.customRepairTask ?? ""}
+                      onChange={(e) => updateDetails({ customRepairTask: e.target.value })}
+                      placeholder="Other repair task (optional)"
+                      className="w-full px-3 py-3 bg-card border border-border rounded-xl font-bold text-sm"
+                    />
+                  </div>
+                )}
+
                 {/* Receipt OCR */}
                 <div className="p-4 rounded-2xl border border-border bg-accent/20 space-y-3">
                   <div className="flex items-center justify-between gap-3">
@@ -934,6 +1035,87 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
                     />
                   </div>
                 </div>
+
+                {isFuelCategory && (
+                  <div className="p-4 rounded-2xl border border-border bg-amber-500/10 space-y-3">
+                    <p className="text-sm font-black text-foreground">Fuel Smart Fields</p>
+                    <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold">
+                      Enter price/liter and we auto-calculate liters from total amount
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-black uppercase tracking-wider text-muted-foreground">
+                          Price Per Liter
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={fuel.pricePerLiter ?? ""}
+                          onChange={(e) =>
+                            setFuel((prev) => ({
+                              ...prev,
+                              pricePerLiter: e.target.value ? Number(e.target.value) : undefined,
+                            }))
+                          }
+                          placeholder="e.g. 323.05"
+                          className="w-full px-3 py-3 bg-card border border-border rounded-xl font-bold text-sm"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-black uppercase tracking-wider text-muted-foreground">
+                          Calculated Liters
+                        </label>
+                        <input
+                          type="text"
+                          value={computedFuelLiters?.toString() ?? ""}
+                          readOnly
+                          placeholder="Auto from amount / price"
+                          className="w-full px-3 py-3 bg-accent/30 border border-border rounded-xl font-bold text-sm text-foreground"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-black uppercase tracking-wider text-muted-foreground">
+                          Odometer (km)
+                        </label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={fuel.odometerKm ?? ""}
+                          onChange={(e) =>
+                            setFuel((prev) => ({
+                              ...prev,
+                              odometerKm: e.target.value ? Number(e.target.value) : undefined,
+                            }))
+                          }
+                          placeholder="Optional"
+                          className="w-full px-3 py-3 bg-card border border-border rounded-xl font-bold text-sm"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-black uppercase tracking-wider text-muted-foreground">
+                          Fuel Type
+                        </label>
+                        <select
+                          value={fuel.fuelType ?? "petrol"}
+                          onChange={(e) =>
+                            setFuel((prev) => ({
+                              ...prev,
+                              fuelType: e.target.value as FuelInfo["fuelType"],
+                            }))
+                          }
+                          className="w-full px-3 py-3 bg-card border border-border rounded-xl font-bold text-sm"
+                        >
+                          <option value="petrol">Petrol</option>
+                          <option value="diesel">Diesel</option>
+                          <option value="electric">Electric</option>
+                          <option value="other">Other</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Payment Method */}
                 <div className="space-y-3">
