@@ -1,13 +1,16 @@
 import { useEffect } from "react";
+import { useAppSettings } from "../context/AppSettingsContext";
+import { popBodyScrollLock, pushBodyScrollLock } from "../utils/bodyScrollLock";
 
-declare global {
-  interface Window {
-    __expenseTrackerModalLockCount?: number;
-    __expenseTrackerModalPrevOverflow?: string;
-  }
+export interface UseModalBehaviorOptions {
+  /** When false, background scroll is not locked (overrides the app setting). */
+  lockScroll?: boolean;
 }
 
-export function useModalBehavior(isOpen: boolean, onClose: () => void) {
+export function useModalBehavior(isOpen: boolean, onClose: () => void, options?: UseModalBehaviorOptions) {
+  const { settings } = useAppSettings();
+  const lockScroll = options?.lockScroll ?? settings.modalLockBackgroundScroll;
+
   useEffect(() => {
     if (!isOpen) return;
 
@@ -17,22 +20,15 @@ export function useModalBehavior(isOpen: boolean, onClose: () => void) {
 
     window.addEventListener("keydown", onKeyDown);
 
-    const currentCount = window.__expenseTrackerModalLockCount ?? 0;
-    if (currentCount === 0) {
-      window.__expenseTrackerModalPrevOverflow = document.body.style.overflow;
-      document.body.style.overflow = "hidden";
+    if (lockScroll) {
+      pushBodyScrollLock();
     }
-    window.__expenseTrackerModalLockCount = currentCount + 1;
 
     return () => {
       window.removeEventListener("keydown", onKeyDown);
-
-      const nextCount = Math.max((window.__expenseTrackerModalLockCount ?? 1) - 1, 0);
-      window.__expenseTrackerModalLockCount = nextCount;
-
-      if (nextCount === 0) {
-        document.body.style.overflow = window.__expenseTrackerModalPrevOverflow ?? "";
+      if (lockScroll) {
+        popBodyScrollLock();
       }
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, lockScroll]);
 }

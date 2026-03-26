@@ -16,6 +16,10 @@ export interface AppSettings {
   showPwaInstallPrompt: boolean;
   showSidebarTipCard: boolean;
   compactLayout: boolean;
+  /** Prevent page scroll behind open modals (mobile / desktop). */
+  modalLockBackgroundScroll: boolean;
+  /** Frosted backdrop on modal overlays (disabled when reduced motion is on). */
+  modalBackdropBlur: boolean;
 }
 
 const DEFAULT_APP_SETTINGS: AppSettings = {
@@ -30,6 +34,8 @@ const DEFAULT_APP_SETTINGS: AppSettings = {
   showPwaInstallPrompt: true,
   showSidebarTipCard: true,
   compactLayout: false,
+  modalLockBackgroundScroll: true,
+  modalBackdropBlur: true,
 };
 
 interface AppSettingsContextValue {
@@ -133,6 +139,8 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
         mobileNavbarFixed: true,
         compactLayout: true,
         showSidebarTipCard: false,
+        modalLockBackgroundScroll: true,
+        modalBackdropBlur: true,
       });
       return;
     }
@@ -144,6 +152,8 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
         showPwaInstallPrompt: false,
         showSidebarTipCard: false,
         compactLayout: true,
+        modalLockBackgroundScroll: true,
+        modalBackdropBlur: false,
       });
       return;
     }

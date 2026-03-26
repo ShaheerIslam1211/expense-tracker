@@ -2,6 +2,13 @@ import type { Expense } from '../types';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
+/** Reduce formula injection when CSV is opened in spreadsheet apps. */
+function csvCell(value: string | number): string {
+  let s = String(value);
+  if (/^[=+\-@]/.test(s)) s = `\t${s}`;
+  return `"${s.replace(/"/g, '""')}"`;
+}
+
 export const exportToCSV = (expenses: Expense[]) => {
   const headers = ['Date', 'Type', 'Category', 'Amount', 'Currency', 'Note', 'Payment Method', 'Merchant'];
   
@@ -17,8 +24,8 @@ export const exportToCSV = (expenses: Expense[]) => {
   ]);
 
   const csvContent = [
-    headers.join(','),
-    ...rows.map(r => r.map(cell => `"${cell}"`).join(','))
+    headers.map((h) => csvCell(h)).join(','),
+    ...rows.map(r => r.map(cell => csvCell(cell)).join(','))
   ].join('\n');
 
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });

@@ -10,7 +10,7 @@ interface ModalContextValue {
 
 const ModalContext = createContext<ModalContextValue | null>(null);
 
-// eslint-disable-next-line react-refresh/only-export-components
+ 
 export const useModal = () => {
   const context = useContext(ModalContext);
   if (!context) {
@@ -33,7 +33,7 @@ export const ModalProvider = ({ children }: { children: ReactNode }) => {
     // Delay clearing the transaction to prevent content from disappearing during the closing animation
     setTimeout(() => {
       setEditingTransaction(undefined);
-    }, 300);
+    }, 220);
   };
 
   const value = {

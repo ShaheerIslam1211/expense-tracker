@@ -3,7 +3,7 @@ import { BudgetProvider } from "./context/BudgetContext";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { CategoryProvider } from "./context/CategoryContext";
 import { CardProvider } from "./context/CardContext";
-import { ExpenseProvider } from "./context/ExpenseContext";
+import { ExpenseProviderGate } from "./context/ExpenseContext";
 import { SavingsProvider } from "./context/SavingsContext";
 import { ToastProvider } from "./context/ToastContext";
 import { ThemeProvider } from "./context/ThemeContext";
@@ -61,7 +61,7 @@ function App() {
           <ToastProvider>
             <CategoryProvider>
               <CardProvider>
-                <ExpenseProvider>
+                <ExpenseProviderGate>
                   <SavingsProvider>
                     <BudgetProvider>
                       <ModalProvider>
@@ -125,7 +125,7 @@ function App() {
                       </ModalProvider>
                     </BudgetProvider>
                   </SavingsProvider>
-                </ExpenseProvider>
+                </ExpenseProviderGate>
               </CardProvider>
             </CategoryProvider>
           </ToastProvider>

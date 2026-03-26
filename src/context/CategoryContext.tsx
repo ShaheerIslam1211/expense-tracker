@@ -24,7 +24,7 @@ import { useAuth } from './AuthContext'
 interface CategoryContextValue {
   categories: Category[]
   customCategories: Category[]
-  addCategory: (input: Pick<Category, 'name' | 'icon' | 'color'>) => Promise<void>
+  addCategory: (input: Pick<Category, 'name' | 'icon' | 'color'>) => Promise<string>
   updateCategory: (id: string, updates: Partial<Pick<Category, 'name' | 'icon' | 'color'>>) => Promise<void>
   deleteCategory: (id: string) => Promise<void>
   getCategoryById: (id: string) => Category | undefined
@@ -68,27 +68,29 @@ export function CategoryProvider({ children }: { children: ReactNode }) {
   const isSystemCategory = useCallback((id: string) => CATEGORIES.some((c) => c.id === id), [])
 
   const addCategory = useCallback(
-    async (input: Pick<Category, 'name' | 'icon' | 'color'>) => {
-      if (!user) return
+    async (input: Pick<Category, 'name' | 'icon' | 'color'>): Promise<string> => {
+      if (!user) throw new Error('You must be signed in to add a category.')
       const base = input.name.trim()
-      if (!base) return
-      const generatedId = base
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-+|-+$/g, '')
-        .slice(0, 40) || `cat-${Date.now()}`
+      if (!base) throw new Error('Category name is required.')
+      const generatedId =
+        base
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '-')
+          .replace(/^-+|-+$/g, '')
+          .slice(0, 40) || `cat-${Date.now()}`
       const alreadyExists = categories.some(
-        (c) => c.id === generatedId || c.name.toLowerCase() === base.toLowerCase()
+        (c) => c.id === generatedId || c.name.toLowerCase() === base.toLowerCase(),
       )
-      if (alreadyExists) return
+      if (alreadyExists) throw new Error('A category with this name already exists.')
       await setDoc(doc(db, 'users', user.uid, 'categories', generatedId), {
         name: base,
         icon: input.icon?.trim() || '🏷️',
         color: input.color || '#64748b',
         createdAt: new Date().toISOString(),
       })
+      return generatedId
     },
-    [user, categories]
+    [user, categories],
   )
 
   const updateCategory = useCallback(

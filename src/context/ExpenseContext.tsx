@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { v4 as uuidv4 } from "uuid";
 import {
   startOfMonth,
@@ -12,7 +12,7 @@ import {
   isBefore,
   format,
 } from "date-fns";
-import type { Expense, CategoryId, MonthlySummary } from "../types";
+import type { Expense, CategoryId, MonthlySummary, RecurringInfo } from "../types";
 import { db } from "../firebase";
 import {
   collection,
@@ -43,8 +43,15 @@ interface ExpenseContextValue {
 
 const ExpenseContext = createContext<ExpenseContextValue | null>(null);
 
+const RECURRING_PROCESS_MAX_STEPS = 500;
+
+function recurringInstanceDocId(templateId: string, occurrenceIso: string): string {
+  const safeOcc = occurrenceIso.replace(/[^a-zA-Z0-9]/g, "_");
+  const raw = `r_${templateId}_${safeOcc}`;
+  return raw.length <= 1200 ? raw : raw.slice(0, 1200);
+}
+
 function generateExpenseReference(): string {
-  // 7-digit reference (time + random) keeps the familiar "Ref-0900112" style.
   const timePart = Date.now().toString().slice(-4);
   const randomPart = Math.floor(Math.random() * 1000)
     .toString()
@@ -70,64 +77,84 @@ function stripUndefinedDeep<T>(value: T): T {
 export function ExpenseProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const recurringChainRef = useRef(Promise.resolve());
 
-  // Process recurring transactions
   const processRecurringTransactions = useCallback(
     async (currentExpenses: Expense[]) => {
       if (!user) return;
+      const uid = user.uid;
       const now = new Date();
 
-      for (const expense of currentExpenses) {
-        if (expense.recurring?.isRecurring && expense.recurring.nextOccurrenceDate) {
-          let nextDate = parseISO(expense.recurring.nextOccurrenceDate);
+      for (const template of currentExpenses) {
+        const rec = template.recurring;
+        if (!rec?.isRecurring || !rec.nextOccurrenceDate) continue;
 
-          // If the next occurrence is in the past or today, create a new transaction
-          while (isBefore(nextDate, now) || format(nextDate, "yyyy-MM-dd") === format(now, "yyyy-MM-dd")) {
-            // Create new transaction based on the recurring one
-            const newId = uuidv4();
-            const { recurring: _recurring, ...baseExpense } = expense;
-            const newExpense: Expense = {
-              ...baseExpense,
-              id: newId,
-              date: expense.recurring.nextOccurrenceDate,
-              createdAt: new Date().toISOString(),
-            };
+        let expense = template;
+        let nextDate = parseISO(rec.nextOccurrenceDate);
+        let steps = 0;
 
-            // Add the new transaction instance
-            await setDoc(doc(db, "users", user.uid, "expenses", newId), stripUndefinedDeep(newExpense));
+        while (
+          (isBefore(nextDate, now) || format(nextDate, "yyyy-MM-dd") === format(now, "yyyy-MM-dd")) &&
+          steps < RECURRING_PROCESS_MAX_STEPS
+        ) {
+          steps += 1;
+          const recurringInfo = expense.recurring;
+          if (!recurringInfo?.nextOccurrenceDate) break;
 
-            // Calculate next occurrence date
-            let updatedNextDate: Date;
-            switch (expense.recurring.frequency) {
-              case "daily":
-                updatedNextDate = addDays(nextDate, 1);
-                break;
-              case "weekly":
-                updatedNextDate = addWeeks(nextDate, 1);
-                break;
-              case "monthly":
-                updatedNextDate = addMonths(nextDate, 1);
-                break;
-              case "yearly":
-                updatedNextDate = addYears(nextDate, 1);
-                break;
-              default:
-                updatedNextDate = addMonths(nextDate, 1);
-            }
+          const occurrenceDateStr = recurringInfo.nextOccurrenceDate;
+          const newId = recurringInstanceDocId(expense.id, occurrenceDateStr);
 
-            // Update the original recurring template with the new nextOccurrenceDate
-            const nextOccurrenceStr = updatedNextDate.toISOString();
-            await updateDoc(doc(db, "users", user.uid, "expenses", expense.id), {
-              "recurring.nextOccurrenceDate": nextOccurrenceStr,
-              "recurring.lastProcessedDate": new Date().toISOString(),
-            });
+          const { recurring: _rec, ...baseExpense } = expense;
+          void _rec;
 
-            nextDate = updatedNextDate;
+          const newExpense: Expense = {
+            ...baseExpense,
+            id: newId,
+            date: occurrenceDateStr,
+            createdAt: new Date().toISOString(),
+          };
 
-            // Break if we've reached an end date
-            if (expense.recurring.endDate && isBefore(parseISO(expense.recurring.endDate), nextDate)) {
+          await setDoc(doc(db, "users", uid, "expenses", newId), stripUndefinedDeep(newExpense));
+
+          let updatedNextDate: Date;
+          switch (recurringInfo.frequency) {
+            case "daily":
+              updatedNextDate = addDays(nextDate, 1);
               break;
-            }
+            case "weekly":
+              updatedNextDate = addWeeks(nextDate, 1);
+              break;
+            case "monthly":
+              updatedNextDate = addMonths(nextDate, 1);
+              break;
+            case "yearly":
+              updatedNextDate = addYears(nextDate, 1);
+              break;
+            default:
+              updatedNextDate = addMonths(nextDate, 1);
+          }
+
+          const nextOccurrenceStr = updatedNextDate.toISOString();
+          await updateDoc(doc(db, "users", uid, "expenses", expense.id), {
+            "recurring.nextOccurrenceDate": nextOccurrenceStr,
+            "recurring.lastProcessedDate": new Date().toISOString(),
+          });
+
+          const prevRecurring = expense.recurring;
+          if (!prevRecurring) break;
+
+          const nextRecurring: RecurringInfo = {
+            ...prevRecurring,
+            nextOccurrenceDate: nextOccurrenceStr,
+          };
+          expense = {
+            ...expense,
+            recurring: nextRecurring,
+          };
+          nextDate = updatedNextDate;
+
+          if (nextRecurring.endDate && isBefore(parseISO(nextRecurring.endDate), nextDate)) {
+            break;
           }
         }
       }
@@ -136,10 +163,8 @@ export function ExpenseProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
-    if (!user) {
-      if (expenses.length > 0) setExpenses([]);
-      return;
-    }
+    if (!user) return;
+
     const q = query(collection(db, "users", user.uid, "expenses"), orderBy("date", "desc"));
     const unsub = onSnapshot(q, (snap) => {
       const next: Expense[] = snap.docs.map((d) => {
@@ -150,16 +175,21 @@ export function ExpenseProvider({ children }: { children: ReactNode }) {
         return {
           ...data,
           id: expenseId,
-          type: data.type || "expense", // Default to expense for legacy data
+          type: data.type || "expense",
         } as Expense;
       });
       setExpenses(next);
 
-      // Process recurring transactions whenever expenses are updated
-      processRecurringTransactions(next);
+      recurringChainRef.current = recurringChainRef.current
+        .then(() => processRecurringTransactions(next))
+        .catch((err) => console.error("Recurring processing failed:", err));
     });
-    return () => unsub();
-  }, [user, processRecurringTransactions, expenses.length]);
+
+    return () => {
+      unsub();
+      recurringChainRef.current = Promise.resolve();
+    };
+  }, [user, processRecurringTransactions]);
 
   const addExpense = useCallback(
     async (expense: Omit<Expense, "id" | "createdAt">) => {
@@ -254,7 +284,6 @@ export function ExpenseProvider({ children }: { children: ReactNode }) {
             if (e.paymentMethodType === "cash") cashTotal += e.amount;
             else cardTotal += e.amount;
           } else {
-            // Income handling
             if (e.paymentMethodType === "cash") cashTotal += e.amount;
             else cardTotal += e.amount;
           }
@@ -376,6 +405,12 @@ export function ExpenseProvider({ children }: { children: ReactNode }) {
   );
 
   return <ExpenseContext.Provider value={value}>{children}</ExpenseContext.Provider>;
+}
+
+/** Remounts expense state when the signed-in user changes so data never leaks across accounts. */
+export function ExpenseProviderGate({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  return <ExpenseProvider key={user?.uid ?? "__signed_out__"}>{children}</ExpenseProvider>;
 }
 
 export function useExpenses() {

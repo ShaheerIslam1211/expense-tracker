@@ -10,6 +10,8 @@ import { getCurrencyConfig } from "../utils/currency";
 import type { Card } from "../types";
 import { maskAmount, useSensitiveMode } from "../hooks/useSensitiveMode";
 import { useModalBehavior } from "../hooks/useModalBehavior";
+import { useAppSettings } from "../context/AppSettingsContext";
+import { modalBackdropBlurClass } from "../utils/modalBackdrop";
 
 function getCardDigits(value: string): string {
   return value.replace(/\D/g, "");
@@ -158,6 +160,7 @@ export default function Cards() {
   const { cards, addCard, deleteCard, updateCard } = useCards();
   const { showToast } = useToast();
   const { currency } = useCurrency();
+  const { settings } = useAppSettings();
   const { hideSensitiveValues, toggleSensitiveValues } = useSensitiveMode();
   const [isAdding, setIsAdding] = useState(false);
   const [editingCard, setEditingCard] = useState<Card | null>(null);
@@ -263,7 +266,10 @@ export default function Cards() {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm"
+            className={cn(
+              "fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60",
+              modalBackdropBlurClass(settings.modalBackdropBlur, settings.reducedMotion),
+            )}
             onClick={handleClose}
           >
             <motion.form

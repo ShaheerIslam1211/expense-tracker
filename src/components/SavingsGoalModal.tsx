@@ -5,6 +5,9 @@ import { X, Calendar, Tag, DollarSign } from "lucide-react";
 import { useSavings } from "../context/SavingsContext";
 import { useToast } from "../context/ToastContext";
 import { useModalBehavior } from "../hooks/useModalBehavior";
+import { useAppSettings } from "../context/AppSettingsContext";
+import { modalBackdropBlurClass } from "../utils/modalBackdrop";
+import { cn } from "../utils/cn";
 import type { SavingsGoal } from "../types";
 
 interface SavingsGoalModalProps {
@@ -16,6 +19,7 @@ interface SavingsGoalModalProps {
 export const SavingsGoalModal: React.FC<SavingsGoalModalProps> = ({ isOpen, onClose, editingGoal }) => {
   const { addSavingsGoal, updateSavingsGoal } = useSavings();
   const { showToast } = useToast();
+  const { settings } = useAppSettings();
   const [name, setName] = useState(editingGoal?.name || "");
   const [description, setDescription] = useState(editingGoal?.description || "");
   const [targetAmount, setTargetAmount] = useState(editingGoal?.targetAmount.toString() || "");
@@ -62,7 +66,10 @@ export const SavingsGoalModal: React.FC<SavingsGoalModalProps> = ({ isOpen, onCl
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4"
+          className={cn(
+            "fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-3 sm:p-4",
+            modalBackdropBlurClass(settings.modalBackdropBlur, settings.reducedMotion),
+          )}
           onClick={onClose}
         >
           <motion.div
