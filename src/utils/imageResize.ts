@@ -1,7 +1,10 @@
 /**
  * Utility functions for resizing and compressing images
- * Optimized for Firebase Firestore storage limits (~1MB per document)
+ * Optimized for Firebase Firestore limits (string field max 1,048,487 bytes).
  */
+
+/** Full data URL must stay under this — Firestore string limit minus margin for prefix. */
+export const MAX_PHOTO_DATA_URL_LENGTH = 900_000
 
 /**
  * Resize and compress an image file
@@ -160,13 +163,22 @@ export function resizeDataUrl(
             reject(new Error('Failed to create blob'))
             return
           }
-          if (blob.size > maxSizeBytes && (maxDim > 400 || quality > 0.5)) {
-            const nextDim = Math.max(400, maxDim - 100)
-            const nextQ = Math.max(0.5, quality - 0.1)
-            resizeDataUrl(dataUrl, maxSizeBytes, nextDim, nextQ)
-              .then(resolve)
-              .catch(reject)
-            return
+          if (blob.size > maxSizeBytes) {
+            const scaled = Math.floor(maxDim * 0.78)
+            const nextDim = Math.min(maxDim - 1, Math.max(48, scaled))
+            const nextQ = Math.max(0.22, quality - 0.07)
+            if (nextDim < maxDim) {
+              resizeDataUrl(dataUrl, maxSizeBytes, nextDim, nextQ)
+                .then(resolve)
+                .catch(reject)
+              return
+            }
+            if (quality > 0.24) {
+              resizeDataUrl(dataUrl, maxSizeBytes, maxDim, Math.max(0.22, quality - 0.06))
+                .then(resolve)
+                .catch(reject)
+              return
+            }
           }
           const reader = new FileReader()
           reader.onload = () => resolve(reader.result as string)
@@ -199,4 +211,36 @@ export function needsResizing(file: File, maxSizeBytes: number = 500 * 1024): bo
 
   // PNGs and other formats often need resizing
   return file.type !== 'image/jpeg' || file.size > maxSizeBytes
+}
+
+/**
+ * Shrinks a JPEG data URL until it fits Firestore's per-field string limit.
+ * Keeps full-resolution image in memory for OCR; call this only when persisting.
+ */
+export async function ensurePhotoDataUrlForFirestore(dataUrl: string): Promise<string> {
+  if (dataUrl.length <= MAX_PHOTO_DATA_URL_LENGTH) {
+    return dataUrl
+  }
+
+  let maxBlob = 420 * 1024
+  let maxDim = 1100
+  let quality = 0.78
+
+  for (let i = 0; i < 18; i++) {
+    const out = await resizeDataUrl(dataUrl, maxBlob, maxDim, quality)
+    if (out.length <= MAX_PHOTO_DATA_URL_LENGTH) {
+      return out
+    }
+    maxBlob = Math.max(96 * 1024, Math.floor(maxBlob * 0.72))
+    maxDim = Math.max(320, Math.floor(maxDim * 0.86))
+    quality = Math.max(0.35, quality - 0.05)
+  }
+
+  const last = await resizeDataUrl(dataUrl, 96 * 1024, 320, 0.35)
+  if (last.length > MAX_PHOTO_DATA_URL_LENGTH) {
+    throw new Error(
+      'Receipt image is still too large after compression. Try cropping the receipt or retaking the photo.',
+    )
+  }
+  return last
 }

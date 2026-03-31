@@ -61,7 +61,16 @@ export default function Dashboard() {
   const [monthOffset, setMonthOffset] = useState(0);
   const { showTransactionModal } = useModal();
 
-  const { getExpensesByMonth, totalSpent, totalIncome, getBalances, expenses: allExpenses } = useExpenses();
+  const {
+    getExpensesByMonth,
+    totalSpent,
+    totalSpentForBudget,
+    getDadPaybackOffset,
+    getDadOutstandingAfterMonth,
+    totalIncome,
+    getBalances,
+    expenses: allExpenses,
+  } = useExpenses();
   const { categories } = useCategories();
   const { monthlyBudget } = useBudget();
   const { cards } = useCards();
@@ -75,23 +84,28 @@ export default function Dashboard() {
   const month = base.getMonth() + 1;
   const currentMonthExpenses = getExpensesByMonth(year, month);
   const totalExpenses = totalSpent(year, month);
+  const budgetSpend = totalSpentForBudget(year, month);
+  const dadPaybackOffset = getDadPaybackOffset(year, month);
+  const dadStillFronted = getDadOutstandingAfterMonth(year, month);
   const totalInc = totalIncome(year, month);
   const netBalance = totalInc - totalExpenses;
   const previousMonthDate = subMonths(base, 1);
-  const previousMonthExpenses = totalSpent(previousMonthDate.getFullYear(), previousMonthDate.getMonth() + 1);
+  const py = previousMonthDate.getFullYear();
+  const pm = previousMonthDate.getMonth() + 1;
+  const previousMonthExpenses = totalSpentForBudget(py, pm);
   const expenseChange =
-    previousMonthExpenses > 0 ? ((totalExpenses - previousMonthExpenses) / previousMonthExpenses) * 100 : 0;
+    previousMonthExpenses > 0 ? ((budgetSpend - previousMonthExpenses) / previousMonthExpenses) * 100 : 0;
   const { cash, cards: cardBalances } = getBalances();
   const recurringTemplates = allExpenses.filter((e) => e.recurring?.isRecurring).length;
-  const budgetProgress = Math.min((totalExpenses / (monthlyBudget || 1)) * 100, 100);
+  const budgetProgress = Math.min((budgetSpend / (monthlyBudget || 1)) * 100, 100);
   const monthEnd = endOfMonth(base);
   const monthDays = getDate(monthEnd);
   const isCurrentViewedMonth = isSameMonth(base, new Date());
   const elapsedDays = isCurrentViewedMonth ? Math.max(1, new Date().getDate()) : monthDays;
   const remainingDays = Math.max(monthDays - elapsedDays, 0);
-  const projectedMonthSpend = elapsedDays > 0 ? (totalExpenses / elapsedDays) * monthDays : totalExpenses;
+  const projectedMonthSpend = elapsedDays > 0 ? (budgetSpend / elapsedDays) * monthDays : budgetSpend;
   const dailyBudgetLeft =
-    monthlyBudget > 0 && remainingDays > 0 ? (monthlyBudget - totalExpenses) / remainingDays : 0;
+    monthlyBudget > 0 && remainingDays > 0 ? (monthlyBudget - budgetSpend) / remainingDays : 0;
   const budgetRunwayStatus = dailyBudgetLeft < 0 ? "Over pace" : dailyBudgetLeft < 100 ? "Tight pace" : "Healthy pace";
   const last14Days = eachDayOfInterval({ start: subDays(new Date(), 13), end: new Date() });
   const dailyExpenseSeries = last14Days.map((d) =>
@@ -111,6 +125,14 @@ export default function Dashboard() {
   const financialHealthScore = Math.round(budgetScore * 0.45 + savingsCompletion * 0.3 + netScore * 0.25);
   const smartAlerts: string[] = [];
   if (budgetProgress > 90) smartAlerts.push("You are above 90% of your monthly budget.");
+  if (dadPaybackOffset > 0)
+    smartAlerts.push(
+      `Dad reimbursements reduced budget-relevant spend by ${formatAmount(dadPaybackOffset)} this month.`,
+    );
+  if (dadStillFronted > 0)
+    smartAlerts.push(
+      `You still fronted ${formatAmount(dadStillFronted)} for Dad's expenses (after all paybacks through this month).`,
+    );
   if (netBalance < 0) smartAlerts.push("This month is cashflow negative. Consider reducing discretionary spend.");
   if (recurringTemplates > 0) smartAlerts.push(`${recurringTemplates} recurring transaction templates are active.`);
   if (smartAlerts.length === 0) smartAlerts.push("Great job. Your spending is currently in a healthy range.");
@@ -220,6 +242,12 @@ export default function Dashboard() {
           <p className="text-3xl sm:text-4xl font-black text-foreground">
             {maskAmount(formatAmount(totalExpenses), hideSensitiveValues)}
           </p>
+          {dadPaybackOffset > 0 && (
+            <p className="text-xs font-bold text-primary mt-2 leading-relaxed">
+              Budget counts {maskAmount(formatAmount(budgetSpend), hideSensitiveValues)} after dad payback (
+              {maskAmount(formatAmount(dadPaybackOffset), hideSensitiveValues)} off Dad&apos;s expenses)
+            </p>
+          )}
           <div className="mt-4 h-2 bg-accent/10 rounded-full overflow-hidden">
             <div
               className={cn(
@@ -230,7 +258,7 @@ export default function Dashboard() {
             />
           </div>
           <p className="text-[10px] font-bold text-muted-foreground mt-2 uppercase tracking-tighter">
-            {budgetProgress.toFixed(1)}% of budget used
+            {budgetProgress.toFixed(1)}% of budget used (vs salary limit)
           </p>
         </div>
 
@@ -469,9 +497,14 @@ export default function Dashboard() {
                       {categories.find((c) => c.id === expense.categoryId)?.icon || "💰"}
                     </div>
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-bold text-foreground">{expense.note || expense.merchant || "Transaction"}</p>
                         {expense.recurring?.isRecurring && <Repeat className="h-3 w-3 text-primary" />}
+                        {expense.type === "income" && expense.dadRecovery && (
+                          <span className="text-[9px] font-black uppercase tracking-tighter px-2 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/20">
+                            Dad payback
+                          </span>
+                        )}
                       </div>
                       <p className="text-xs text-muted-foreground font-medium">
                         {format(new Date(expense.date), "MMM d, yyyy")}

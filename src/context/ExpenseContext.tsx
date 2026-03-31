@@ -13,12 +13,23 @@ import {
   format,
 } from "date-fns";
 import type { Expense, CategoryId, MonthlySummary, RecurringInfo } from "../types";
-import { db } from "../firebase";
+import {
+  dadBudgetOffsetForMonth,
+  dadOutstandingThroughMonthEnd,
+  totalSpentForBudget as computeTotalSpentForBudget,
+} from "../utils/dadRecoveryBudget";
+import { db, storage } from "../firebase";
+import {
+  deleteAllExpenseReceiptFiles,
+  getExpenseReceiptRemoteUrls,
+  syncExpenseReceiptPhotos,
+} from "../utils/expenseReceiptStorage";
 import {
   collection,
   deleteDoc,
   deleteField,
   doc,
+  getDoc,
   onSnapshot,
   orderBy,
   query,
@@ -37,6 +48,10 @@ interface ExpenseContextValue {
   getCategoryTotal: (year: number, month: number, categoryId: CategoryId) => number;
   getFuelExpenses: (year?: number, month?: number) => Expense[];
   totalSpent: (year?: number, month?: number) => number;
+  /** Expenses minus dad payback (FIFO) for that month — use for budget vs salary. */
+  totalSpentForBudget: (year: number, month: number) => number;
+  getDadPaybackOffset: (year: number, month: number) => number;
+  getDadOutstandingAfterMonth: (year: number, month: number) => number;
   totalIncome: (year?: number, month?: number) => number;
   getBalances: () => { cash: number; cards: Record<string, number> };
 }
@@ -104,8 +119,11 @@ export function ExpenseProvider({ children }: { children: ReactNode }) {
           const occurrenceDateStr = recurringInfo.nextOccurrenceDate;
           const newId = recurringInstanceDocId(expense.id, occurrenceDateStr);
 
-          const { recurring: _rec, ...baseExpense } = expense;
+          const { recurring: _rec, photoDataUrl: _pd, photoUrl: _pu, photoUrls: _pus, ...baseExpense } = expense;
           void _rec;
+          void _pd;
+          void _pu;
+          void _pus;
 
           const newExpense: Expense = {
             ...baseExpense,
@@ -195,13 +213,36 @@ export function ExpenseProvider({ children }: { children: ReactNode }) {
     async (expense: Omit<Expense, "id" | "createdAt">) => {
       if (!user) return;
       const expenseId = uuidv4();
+      const {
+        pendingReceiptPhotos,
+        photoDataUrl: legacyData,
+        photoUrl: _pu,
+        photoUrls: _purls,
+        ...rest
+      } = expense;
+      void _pu;
+      void _purls;
       const reference =
-        expense.type === "expense" && !expense.reference?.trim() ? generateExpenseReference() : expense.reference;
+        rest.type === "expense" && !rest.reference?.trim() ? generateExpenseReference() : rest.reference;
+
+      const pending =
+        pendingReceiptPhotos !== undefined
+          ? pendingReceiptPhotos
+          : legacyData?.trim().startsWith("data:")
+            ? [legacyData]
+            : [];
+
+      let photoUrls: string[] | undefined;
+      if (pending.length > 0) {
+        photoUrls = await syncExpenseReceiptPhotos(storage, user.uid, expenseId, pending, []);
+      }
+
       const newExpense: Expense = {
-        ...expense,
+        ...rest,
         reference,
         id: expenseId,
         createdAt: new Date().toISOString(),
+        ...(photoUrls?.length ? { photoUrls } : {}),
       };
       const clean = stripUndefinedDeep(newExpense);
       try {
@@ -218,15 +259,55 @@ export function ExpenseProvider({ children }: { children: ReactNode }) {
     async (id: string, updates: Partial<Expense>) => {
       if (!user) return;
 
-      const ref = doc(db, "users", user.uid, "expenses", id);
+      const docRef = doc(db, "users", user.uid, "expenses", id);
       const clean: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(updates)) {
+      const { pendingReceiptPhotos, ...restUpdates } = updates;
+
+      if (pendingReceiptPhotos !== undefined) {
+        const snap = await getDoc(docRef);
+        const prevExp = snap.exists() ? ({ ...snap.data(), id } as Expense) : null;
+        const prevRemotes = getExpenseReceiptRemoteUrls(prevExp);
+        const synced = await syncExpenseReceiptPhotos(storage, user.uid, id, pendingReceiptPhotos, prevRemotes);
+        if (synced.length === 0) {
+          clean.photoUrls = deleteField();
+          clean.photoUrl = deleteField();
+          clean.photoDataUrl = deleteField();
+        } else {
+          clean.photoUrls = synced;
+          clean.photoUrl = deleteField();
+          clean.photoDataUrl = deleteField();
+        }
+      }
+
+      for (const [k, v] of Object.entries(restUpdates)) {
+        if (k === "pendingReceiptPhotos") continue;
+        if (pendingReceiptPhotos !== undefined && (k === "photoUrl" || k === "photoUrls" || k === "photoDataUrl")) {
+          continue;
+        }
+        if (k === "photoDataUrl" && typeof v === "string" && v.startsWith("data:")) {
+          const snap = await getDoc(docRef);
+          const prevExp = snap.exists() ? ({ ...snap.data(), id } as Expense) : null;
+          const synced = await syncExpenseReceiptPhotos(storage, user.uid, id, [v], getExpenseReceiptRemoteUrls(prevExp));
+          if (synced.length === 0) {
+            clean.photoUrls = deleteField();
+            clean.photoUrl = deleteField();
+            clean.photoDataUrl = deleteField();
+          } else {
+            clean.photoUrls = synced;
+            clean.photoUrl = deleteField();
+            clean.photoDataUrl = deleteField();
+          }
+          continue;
+        }
+        if (k === "photoDataUrl" && typeof v === "string" && !v.startsWith("data:")) {
+          continue;
+        }
         if (v === undefined) clean[k] = deleteField();
         else clean[k] = stripUndefinedDeep(v);
       }
 
       try {
-        await updateDoc(ref, clean);
+        await updateDoc(docRef, clean);
       } catch (error) {
         console.error("Failed to update expense:", error);
         throw error;
@@ -241,6 +322,7 @@ export function ExpenseProvider({ children }: { children: ReactNode }) {
       const ref = doc(db, "users", user.uid, "expenses", id);
       try {
         await deleteDoc(ref);
+        await deleteAllExpenseReceiptFiles(storage, user.uid, id);
       } catch (error) {
         console.error("Failed to delete expense:", error);
         throw error;
@@ -345,6 +427,21 @@ export function ExpenseProvider({ children }: { children: ReactNode }) {
     [expenses],
   );
 
+  const totalSpentForBudget = useCallback(
+    (year: number, month: number) => computeTotalSpentForBudget(expenses, year, month),
+    [expenses],
+  );
+
+  const getDadPaybackOffset = useCallback(
+    (year: number, month: number) => dadBudgetOffsetForMonth(expenses, year, month),
+    [expenses],
+  );
+
+  const getDadOutstandingAfterMonth = useCallback(
+    (year: number, month: number) => dadOutstandingThroughMonthEnd(expenses, year, month),
+    [expenses],
+  );
+
   const totalIncome = useCallback(
     (year?: number, month?: number) => {
       let list = expenses.filter((e) => e.type === "income");
@@ -386,6 +483,9 @@ export function ExpenseProvider({ children }: { children: ReactNode }) {
       getCategoryTotal,
       getFuelExpenses,
       totalSpent,
+      totalSpentForBudget,
+      getDadPaybackOffset,
+      getDadOutstandingAfterMonth,
       totalIncome,
       getBalances,
     }),
@@ -399,6 +499,9 @@ export function ExpenseProvider({ children }: { children: ReactNode }) {
       getCategoryTotal,
       getFuelExpenses,
       totalSpent,
+      totalSpentForBudget,
+      getDadPaybackOffset,
+      getDadOutstandingAfterMonth,
       totalIncome,
       getBalances,
     ],

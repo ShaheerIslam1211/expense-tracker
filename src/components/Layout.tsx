@@ -193,7 +193,7 @@ export default function Layout() {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 md:pl-64">
-        <div className="flex-1 md:overflow-y-auto pb-[calc(6rem+env(safe-area-inset-bottom))] md:pb-8">
+        <div className="flex-1 md:overflow-y-auto pb-[calc(7.5rem+env(safe-area-inset-bottom))] md:pb-8">
           <div className={cn("max-w-6xl mx-auto px-4 sm:px-6 lg:px-8", settings.compactLayout ? "py-5" : "py-8")}>
             <Outlet />
           </div>
@@ -204,7 +204,7 @@ export default function Layout() {
       {settings.showFloatingAddButton && (
         <button
           onClick={() => showTransactionModal()}
-          className="fixed bottom-[calc(6rem+env(safe-area-inset-bottom))] right-6 md:bottom-8 md:right-8 bg-primary text-primary-foreground p-5 rounded-3xl shadow-2xl shadow-primary/40 hover:scale-110 active:scale-95 transition-all z-40"
+          className="fixed bottom-[calc(7.5rem+env(safe-area-inset-bottom))] right-4 sm:right-6 md:bottom-8 md:right-8 bg-primary text-primary-foreground p-4 sm:p-5 rounded-3xl shadow-2xl shadow-primary/40 hover:scale-110 active:scale-95 transition-all z-40"
           aria-label="Add transaction"
         >
           <Plus className="h-8 w-8 stroke-3" />

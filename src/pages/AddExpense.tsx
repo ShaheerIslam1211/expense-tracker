@@ -20,6 +20,7 @@ import {
   buildDetailsSummary,
   isBikeRepairCategory,
 } from "../utils/expenseDetails";
+import { ReceiptPhotosField } from "../components/ReceiptPhotosField";
 
 export default function AddExpense() {
   const navigate = useNavigate();
@@ -28,8 +29,6 @@ export default function AddExpense() {
   const { cards } = useCards();
   const { showToast } = useToast();
   const { formatAmount, currency } = useCurrency();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
   const [amount, setAmount] = useState("");
   const [categoryId, setCategoryId] = useState<CategoryId>("other");
   const [customCategory, setCustomCategory] = useState("");
@@ -38,7 +37,7 @@ export default function AddExpense() {
   const [merchant, setMerchant] = useState("");
   const [paymentMethodType, setPaymentMethodType] = useState<PaymentMethodType>("cash");
   const [paymentMethodId, setPaymentMethodId] = useState("");
-  const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null);
+  const [receiptPhotos, setReceiptPhotos] = useState<string[]>([]);
   const [isFuel, setIsFuel] = useState(false);
   const [fuel, setFuel] = useState<FuelInfo>({
     volumeLiters: undefined,
@@ -57,10 +56,22 @@ export default function AddExpense() {
   const [parsedReceiptType, setParsedReceiptType] = useState<"health" | "grocery" | "fuel" | "generic" | undefined>();
   const [healthDetails, setHealthDetails] = useState("");
   const [accuracyConfirmed, setAccuracyConfirmed] = useState<boolean | null>(null);
-  const [processingPhoto, setProcessingPhoto] = useState(false);
   const [saving, setSaving] = useState(false);
   const [details, setDetails] = useState<ExpenseAdvancedDetails>({});
   const detailReportInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (receiptPhotos.length > 0) return;
+    setScannedItems([]);
+    setParsedTotal(undefined);
+    setParsedDate(undefined);
+    setParsedMerchant(undefined);
+    setParsedReference(undefined);
+    setParsedDescription(undefined);
+    setParsedReceiptType(undefined);
+    setAccuracyConfirmed(null);
+    setHealthDetails("");
+  }, [receiptPhotos.length]);
 
   const updateDetails = (updates: Partial<ExpenseAdvancedDetails>) => {
     setDetails((prev) => ({ ...prev, ...updates }));
@@ -155,48 +166,14 @@ export default function AddExpense() {
     });
   }, [categoryId, categories]);
 
-  const handlePhotoClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !file.type.startsWith("image/")) return;
-
-    setProcessingPhoto(true);
-    setAccuracyConfirmed(null);
-    try {
-      // Use ORIGINAL image for OCR - better accuracy like Zoho
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-      setPhotoDataUrl(dataUrl);
-      setScannedItems([]);
-      setParsedTotal(undefined);
-      setParsedDate(undefined);
-      setParsedMerchant(undefined);
-      setParsedReference(undefined);
-      setParsedDescription(undefined);
-      setParsedReceiptType(undefined);
-      setHealthDetails("");
-    } catch (error) {
-      console.error("Error loading image:", error);
-      alert("Failed to load image. Please try again.");
-    } finally {
-      setProcessingPhoto(false);
-    }
-  };
-
   const handleScanReceipt = async () => {
-    if (!photoDataUrl) return;
+    const primary = receiptPhotos[0];
+    if (!primary) return;
     setScanning(true);
     setScanProgress(0);
     setAccuracyConfirmed(null);
     try {
-      const parsed = await scanReceiptImage(photoDataUrl, setScanProgress);
+      const parsed = await scanReceiptImage(primary, setScanProgress);
 
       // Log the scanned receipt data for debugging
       console.log("🛒 Receipt Scan Results:", {
@@ -265,19 +242,13 @@ export default function AddExpense() {
     setScannedItems((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const getPhotoForStorage = async (): Promise<string | undefined> => {
-    if (!photoDataUrl) return undefined;
-    if (photoDataUrl.length < 1_600_000) return photoDataUrl;
-    try {
-      // Keep receipt human-readable after save; OCR always uses original.
-      return await resizeDataUrl(photoDataUrl, 1_100_000, 1400, 0.88);
-    } catch {
-      return undefined;
-    }
+  const getPendingReceiptPhotos = (): string[] | undefined => {
+    if (receiptPhotos.length === 0) return undefined;
+    return receiptPhotos;
   };
 
   const handleAddAllAsItemized = async () => {
-    const photo = await getPhotoForStorage();
+    const pendingPhotos = getPendingReceiptPhotos();
     const dateIso = new Date(date).toISOString();
     try {
       let addedCount = 0;
@@ -293,12 +264,12 @@ export default function AddExpense() {
         };
         if (merchant) expenseData.merchant = merchant;
         if (parsedReference) expenseData.reference = parsedReference;
-        if (photo) expenseData.photoDataUrl = photo;
+        if (pendingPhotos) expenseData.pendingReceiptPhotos = pendingPhotos;
         await addExpense(expenseData as Parameters<typeof addExpense>[0]);
         addedCount++;
       }
       setScannedItems([]);
-      setPhotoDataUrl(null);
+      setReceiptPhotos([]);
       setParsedTotal(undefined);
       setParsedMerchant(undefined);
       setHealthDetails("");
@@ -313,7 +284,7 @@ export default function AddExpense() {
   const handleAddAsSingleExpense = async () => {
     const total = parsedTotal ?? scannedItems.reduce((s, i) => s + i.amount, 0);
     if (total <= 0) return;
-    const photo = await getPhotoForStorage();
+    const pendingPhotos = getPendingReceiptPhotos();
     const dateIso = parsedDate ? new Date(parsedDate + "T12:00:00").toISOString() : new Date(date).toISOString();
     const suggested = parsedMerchant ? suggestCategory(parsedMerchant) : categoryId;
     const expenseData: Record<string, unknown> = {
@@ -325,11 +296,11 @@ export default function AddExpense() {
     };
     if (parsedMerchant) expenseData.merchant = parsedMerchant;
     if (parsedReference) expenseData.reference = parsedReference;
-    if (photo) expenseData.photoDataUrl = photo;
+    if (pendingPhotos) expenseData.pendingReceiptPhotos = pendingPhotos;
     try {
       await addExpense(expenseData as Parameters<typeof addExpense>[0]);
       setScannedItems([]);
-      setPhotoDataUrl(null);
+      setReceiptPhotos([]);
       setAmount("");
       setParsedTotal(undefined);
       setParsedMerchant(undefined);
@@ -358,7 +329,7 @@ export default function AddExpense() {
     const num = parseFloat(amount.replace(/,/g, ""));
     if (Number.isNaN(num) || num <= 0) return;
 
-    const photo = await getPhotoForStorage();
+    const pendingPhotos = getPendingReceiptPhotos();
     const normalizedDetails: ExpenseAdvancedDetails = {
       ...Object.fromEntries(Object.entries(details).filter(([, value]) => typeof value === "string" && value.trim().length > 0)),
       ...(details.repairTasks?.length ? { repairTasks: details.repairTasks } : {}),
@@ -378,7 +349,7 @@ export default function AddExpense() {
     };
     if (merchant) expenseData.merchant = merchant;
     if (parsedReference) expenseData.reference = parsedReference;
-    if (photo) expenseData.photoDataUrl = photo;
+    if (pendingPhotos) expenseData.pendingReceiptPhotos = pendingPhotos;
     if (categoryId === "other" && customCategory.trim()) {
       expenseData.customCategory = customCategory.trim();
     }
@@ -426,46 +397,12 @@ export default function AddExpense() {
           <label className="block text-sm font-medium text-(--text-muted) mb-1">
             📷 Receipt – Scan to auto-fill amount, date, merchant
           </label>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            onChange={handlePhotoChange}
-            className="hidden"
+          <ReceiptPhotosField
+            photos={receiptPhotos}
+            onChange={setReceiptPhotos}
+            disabled={saving}
           />
-          <button
-            type="button"
-            onClick={handlePhotoClick}
-            disabled={processingPhoto}
-            className="w-full rounded-xl border-2 border-dashed border-(--border) p-4 flex flex-col items-center gap-2 text-(--text-muted) hover:border-(--accent) hover:text-(--accent) transition touch-manipulation min-h-20 disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            {processingPhoto ? (
-              <div className="flex flex-col items-center gap-2">
-                <XlviLoader
-                  boxColors={["var(--accent)", "#F59E0B", "#6366F1"]}
-                  desktopSize="48px"
-                  mobileSize="36px"
-                />
-                <span>Processing image...</span>
-              </div>
-            ) : photoDataUrl ? (
-              <>
-                <img
-                  src={photoDataUrl}
-                  alt="Receipt"
-                  className="max-h-24 rounded-lg object-cover"
-                />
-                <span className="text-sm">Change photo</span>
-              </>
-            ) : (
-              <>
-                <span className="text-2xl">📷</span>
-                <span className="text-sm">Tap to take or upload receipt</span>
-              </>
-            )}
-          </button>
-          {photoDataUrl && !hasScannedItems && (
+          {receiptPhotos.length > 0 && !hasScannedItems && (
             <button
               type="button"
               onClick={handleScanReceipt}
