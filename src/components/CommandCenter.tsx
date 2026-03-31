@@ -59,6 +59,34 @@ export function CommandCenter() {
         run: () => navigate("/history"),
       },
       {
+        id: "history-last7",
+        title: "History — Last 7 days",
+        subtitle: "Open History with last-week range",
+        keywords: ["history", "week", "7", "recent", "filter"],
+        run: () => navigate("/history?preset=last7"),
+      },
+      {
+        id: "history-month",
+        title: "History — This month",
+        subtitle: "Open History for the current month",
+        keywords: ["history", "month", "period"],
+        run: () => navigate("/history?preset=month"),
+      },
+      {
+        id: "go-calendar",
+        title: "Go to Calendar",
+        subtitle: "Month view of transactions",
+        keywords: ["calendar", "dates", "schedule"],
+        run: () => navigate("/calendar"),
+      },
+      {
+        id: "go-fuel",
+        title: "Go to Fuel Tracker",
+        subtitle: "Fuel logs and stats",
+        keywords: ["fuel", "gas", "petrol", "mileage"],
+        run: () => navigate("/fuel"),
+      },
+      {
         id: "go-insights",
         title: "Go to Insights",
         subtitle: "Open advanced analytics",
@@ -105,7 +133,7 @@ export function CommandCenter() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="fixed bottom-24 left-4 md:left-auto md:right-32 md:bottom-8 z-40 px-3 py-2 rounded-xl border border-border bg-card/90 backdrop-blur shadow-lg text-xs font-black uppercase tracking-wider text-foreground hover:bg-accent transition-all inline-flex items-center gap-2"
+        className="fixed bottom-[calc(7.5rem+env(safe-area-inset-bottom))] left-4 md:left-auto md:right-32 md:bottom-8 z-40 px-3 py-2 rounded-xl border border-border bg-card/90 backdrop-blur shadow-lg text-xs font-black uppercase tracking-wider text-foreground hover:bg-accent transition-all inline-flex items-center gap-2 max-w-[calc(100vw-7rem)]"
       >
         <Command className="h-4 w-4 text-primary" />
         Command

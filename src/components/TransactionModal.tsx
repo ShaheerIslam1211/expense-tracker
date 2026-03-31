@@ -11,7 +11,6 @@ import {
   ArrowDownCircle,
   ChevronDown,
   Plus,
-  Camera,
   ScanLine,
 } from "lucide-react";
 import { useExpenses } from "../context/ExpenseContext";
@@ -27,6 +26,8 @@ import { suggestCategory } from "../utils/autoCategorize";
 import { useModalBehavior } from "../hooks/useModalBehavior";
 import { useAppSettings } from "../context/AppSettingsContext";
 import { resizeDataUrl } from "../utils/imageResize";
+import { getExpenseReceiptUrls, receiptImageToDataUrlForOcr } from "../utils/expenseReceiptStorage";
+import { ReceiptPhotosField } from "./ReceiptPhotosField";
 import type {
   Expense,
   CategoryId,
@@ -59,8 +60,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
   const { showToast } = useToast();
   const { currency } = useCurrency();
   const { settings } = useAppSettings();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const reportInputRef = useRef<HTMLInputElement>(null);
+  const lastAutoScanKeyRef = useRef("");
 
   // Form State
   const [type, setType] = useState<TransactionType>("expense");
@@ -70,7 +71,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [merchant, setMerchant] = useState("");
   const [reference, setReference] = useState("");
-  const [photoDataUrl, setPhotoDataUrl] = useState<string | undefined>(undefined);
+  const [receiptPhotos, setReceiptPhotos] = useState<string[]>([]);
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
   const [paymentMethodType, setPaymentMethodType] = useState<PaymentMethodType>("cash");
@@ -90,6 +91,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
   const [newCategoryColor, setNewCategoryColor] = useState("#6366f1");
   const [isAddingCategory, setIsAddingCategory] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [dadRecovery, setDadRecovery] = useState(false);
   useModalBehavior(isOpen, onClose);
 
   const filteredCategories = useMemo(
@@ -110,7 +112,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
       setDate(format(parseISO(editingTransaction.date), "yyyy-MM-dd"));
       setMerchant(editingTransaction.merchant || "");
       setReference(editingTransaction.reference || "");
-      setPhotoDataUrl(editingTransaction.photoDataUrl);
+      setReceiptPhotos(getExpenseReceiptUrls(editingTransaction));
       setPaymentMethodType(editingTransaction.paymentMethodType);
       setPaymentMethodId(editingTransaction.paymentMethodId || "");
       setFuel(
@@ -124,6 +126,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
       setIsRecurring(editingTransaction.recurring?.isRecurring || false);
       setFrequency(editingTransaction.recurring?.frequency || "monthly");
       setDetails(editingTransaction.details || {});
+      setDadRecovery(Boolean(editingTransaction.dadRecovery) && editingTransaction.type === "income");
     } else {
       // Reset form
       setType(settings.defaultTransactionType);
@@ -133,7 +136,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
       setDate(format(new Date(), "yyyy-MM-dd"));
       setMerchant("");
       setReference("");
-      setPhotoDataUrl(undefined);
+      setReceiptPhotos([]);
       setPaymentMethodType(settings.defaultPaymentMethodType);
       if (settings.defaultPaymentMethodType === "card" && cards.length > 0) setPaymentMethodId(cards[0].id);
       else setPaymentMethodId("");
@@ -146,6 +149,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
       setIsRecurring(false);
       setFrequency("monthly");
       setDetails({});
+      setDadRecovery(false);
     }
     setShowAddCategory(false);
     setNewCategoryName("");
@@ -192,6 +196,10 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [type]);
 
+  useEffect(() => {
+    if (type === "expense") setDadRecovery(false);
+  }, [type]);
+
   const handleAddCategory = async () => {
     const name = newCategoryName.trim();
     if (!name) {
@@ -214,55 +222,63 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
     }
   };
 
-  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !file.type.startsWith("image/")) return;
+  useEffect(() => {
+    if (!isOpen) {
+      lastAutoScanKeyRef.current = "";
+      return;
+    }
+    if (!settings.autoScanReceiptOnUpload) return;
+    if (receiptPhotos.length !== 1) return;
+    const only = receiptPhotos[0];
+    if (!only?.startsWith("data:")) return;
 
-    try {
-      const dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-      setPhotoDataUrl(dataUrl);
+    const dedupeKey = only.slice(0, 120);
+    if (lastAutoScanKeyRef.current === dedupeKey) return;
+    lastAutoScanKeyRef.current = dedupeKey;
+
+    let cancelled = false;
+    (async () => {
+      setIsScanning(true);
       setScanProgress(0);
-      if (settings.autoScanReceiptOnUpload) {
-        setIsScanning(true);
-        try {
-          const parsed = await scanReceiptImage(dataUrl, setScanProgress);
-          const parsedAmount = parsed.total ?? parsed.grossTotal ?? parsed.netTotal;
-          if (parsedAmount != null) setAmount(String(parsedAmount));
-          if (parsed.date) setDate(parsed.date);
-          if (parsed.merchant) setMerchant(parsed.merchant);
-          if (parsed.reference) setReference(parsed.reference);
-          if (parsed.description) setNote((prev) => prev || parsed.description || "");
-          if (parsed.merchant && !note) setNote(parsed.merchant);
-          if (parsed.receiptType === "fuel") setCategoryId("fuel");
-          else if (parsed.receiptType === "health") setCategoryId("health");
-          else if (parsed.merchant) setCategoryId(suggestCategory(parsed.merchant));
-          showToast("Receipt auto-scanned", "success");
-        } catch (scanError) {
+      try {
+        const parsed = await scanReceiptImage(only, setScanProgress);
+        if (cancelled) return;
+        const parsedAmount = parsed.total ?? parsed.grossTotal ?? parsed.netTotal;
+        if (parsedAmount != null) setAmount(String(parsedAmount));
+        if (parsed.date) setDate(parsed.date);
+        if (parsed.merchant) setMerchant(parsed.merchant);
+        if (parsed.reference) setReference(parsed.reference);
+        if (parsed.description) setNote((prev) => prev || parsed.description || "");
+        if (parsed.merchant) setNote((prev) => prev || parsed.merchant || "");
+        if (parsed.receiptType === "fuel") setCategoryId("fuel");
+        else if (parsed.receiptType === "health") setCategoryId("health");
+        else if (parsed.merchant) setCategoryId(suggestCategory(parsed.merchant));
+        showToast("Receipt auto-scanned", "success");
+      } catch (scanError) {
+        if (!cancelled) {
           console.error("Auto-scan failed:", scanError);
           showToast("Receipt uploaded (auto-scan failed)", "error");
-        } finally {
-          setIsScanning(false);
         }
+      } finally {
+        if (!cancelled) setIsScanning(false);
       }
-    } catch (error) {
-      console.error("Failed to read image:", error);
-      showToast("Failed to load image", "error");
-    }
-  };
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [receiptPhotos, isOpen, settings.autoScanReceiptOnUpload]);
 
   const handleScanReceipt = async () => {
-    if (!photoDataUrl) {
-      showToast("Upload receipt image first", "error");
+    const primary = receiptPhotos[0];
+    if (!primary) {
+      showToast("Add a receipt image first", "error");
       return;
     }
     setIsScanning(true);
     try {
-      const parsed = await scanReceiptImage(photoDataUrl, setScanProgress);
+      const dataUrl = await receiptImageToDataUrlForOcr(primary);
+      const parsed = await scanReceiptImage(dataUrl, setScanProgress);
 
       const parsedAmount = parsed.total ?? parsed.grossTotal ?? parsed.netTotal;
       if (parsedAmount != null) setAmount(String(parsedAmount));
@@ -397,11 +413,13 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
       date: new Date(date).toISOString(),
       merchant: merchant || undefined,
       reference: reference || undefined,
-      photoDataUrl,
       details: normalizedDetails && Object.keys(normalizedDetails).length > 0 ? normalizedDetails : undefined,
       paymentMethodType,
       paymentMethodId: paymentMethodType === "card" ? paymentMethodId : undefined,
     };
+    if (editingTransaction || receiptPhotos.length > 0) {
+      (transactionData as Expense).pendingReceiptPhotos = receiptPhotos;
+    }
 
     if (isFuelCategory && (fuel.pricePerLiter || fuel.volumeLiters || fuel.odometerKm)) {
       transactionData.fuel = {
@@ -417,6 +435,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
         nextOccurrenceDate: new Date(date).toISOString(), // Start from selected date
       };
     }
+
+    transactionData.dadRecovery = type === "income" ? dadRecovery : false;
 
     try {
       if (editingTransaction) {
@@ -602,6 +622,24 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
                     </div>
                   )}
                 </div>
+
+                {type === "income" && (
+                  <label className="flex items-start gap-3 p-4 rounded-2xl border border-border bg-card cursor-pointer hover:bg-accent/20 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={dadRecovery}
+                      onChange={(e) => setDadRecovery(e.target.checked)}
+                      className="mt-1 h-4 w-4 rounded border-border text-primary focus:ring-primary"
+                    />
+                    <span className="text-sm font-semibold text-foreground leading-snug">
+                      Dad paid me back (reimbursement)
+                      <span className="block text-xs font-medium text-muted-foreground mt-1">
+                        Reduces this month&apos;s budget total by up to this month&apos;s Dad-category spend. The
+                        dashboard also shows how much you still front for dad after all paybacks.
+                      </span>
+                    </span>
+                  </label>
+                )}
 
                 {/* Receipt OCR */}
                 {supportsAdvancedDetails && (
@@ -939,47 +977,28 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
 
                 {/* Receipt OCR */}
                 <div className="p-4 rounded-2xl border border-border bg-accent/20 space-y-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-black text-foreground">Receipt Scan (OCR)</p>
-                      <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">
-                        Upload image and extract amount/date/merchant
-                      </p>
-                    </div>
+                  <div>
+                    <p className="text-sm font-black text-foreground">Receipt photos</p>
+                    <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">
+                      Add several images, remove or replace any time. OCR uses the first photo.
+                    </p>
+                  </div>
+                  <ReceiptPhotosField
+                    photos={receiptPhotos}
+                    onChange={setReceiptPhotos}
+                    disabled={isSaving}
+                    density="compact"
+                  />
+                  {receiptPhotos.length > 0 && (
                     <button
                       type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="px-3 py-2 rounded-xl border border-border bg-background hover:bg-accent text-xs font-black uppercase tracking-widest flex items-center gap-2"
+                      onClick={handleScanReceipt}
+                      disabled={isScanning}
+                      className="w-full py-2.5 rounded-xl bg-primary/10 border border-primary/30 text-primary font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 disabled:opacity-60"
                     >
-                      <Camera className="h-4 w-4" />
-                      Upload
+                      <ScanLine className="h-4 w-4" />
+                      {isScanning ? `Scanning... ${Math.round(scanProgress * 100)}%` : "Extract text (first photo)"}
                     </button>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*"
-                      onChange={handlePhotoChange}
-                      className="hidden"
-                    />
-                  </div>
-
-                  {photoDataUrl && (
-                    <div className="space-y-3">
-                      <img
-                        src={photoDataUrl}
-                        alt="Receipt preview"
-                        className="max-h-28 sm:max-h-36 rounded-xl object-cover border border-border"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleScanReceipt}
-                        disabled={isScanning}
-                        className="w-full py-2.5 rounded-xl bg-primary/10 border border-primary/30 text-primary font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 disabled:opacity-60"
-                      >
-                        <ScanLine className="h-4 w-4" />
-                        {isScanning ? `Scanning... ${Math.round(scanProgress * 100)}%` : "Extract Text"}
-                      </button>
-                    </div>
                   )}
                 </div>
 

@@ -96,12 +96,27 @@ export interface Expense {
   reference?: string; // Receipt/invoice number
   date: string; // ISO
   createdAt: string;
+  /** Firebase Storage download URLs (ordered). */
+  photoUrls?: string[];
+  /** Firebase Storage download URL (legacy single image). */
+  photoUrl?: string;
+  /** Legacy inline image; still read for old documents. */
   photoDataUrl?: string;
+  /**
+   * Client-only: ordered `data:` (new) or `https:` (kept) URLs when saving.
+   * Never written to Firestore.
+   */
+  pendingReceiptPhotos?: string[];
   fuel?: FuelInfo;
   details?: ExpenseAdvancedDetails;
   paymentMethodType: PaymentMethodType;
   paymentMethodId?: string; // Card ID if paymentMethodType is 'card'
   recurring?: RecurringInfo;
+  /**
+   * Income only: dad paid you back for expenses you logged under Dad's expenses.
+   * Applied FIFO against oldest dad expenses (through month-end) to lower budget spend.
+   */
+  dadRecovery?: boolean;
 }
 
 export interface MonthlySummary {

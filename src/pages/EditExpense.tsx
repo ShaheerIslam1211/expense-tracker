@@ -8,7 +8,9 @@ import { AppLoader } from "../components/AppLoader";
 import { type CategoryId, type FuelInfo, type PaymentMethodType, type ExpenseAdvancedDetails } from "../types";
 import { useCards } from "../context/CardContext";
 import { useToast } from "../context/ToastContext";
-import { resizeImage, needsResizing, resizeDataUrl } from "../utils/imageResize";
+import { resizeDataUrl } from "../utils/imageResize";
+import { getExpenseReceiptUrls } from "../utils/expenseReceiptStorage";
+import { ReceiptPhotosField } from "../components/ReceiptPhotosField";
 import {
   DETAIL_SUBCATEGORY_OPTIONS,
   FOOD_ITEM_TYPES,
@@ -25,8 +27,6 @@ export default function EditExpense() {
   const { categories } = useCategories();
   const { cards } = useCards();
   const { showToast } = useToast();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
   const expense = expenses.find((e) => e.id === id);
 
   const [amount, setAmount] = useState("");
@@ -36,7 +36,7 @@ export default function EditExpense() {
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [paymentMethodType, setPaymentMethodType] = useState<PaymentMethodType>("cash");
   const [paymentMethodId, setPaymentMethodId] = useState("");
-  const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null);
+  const [receiptPhotos, setReceiptPhotos] = useState<string[]>([]);
   const [isFuel, setIsFuel] = useState(false);
   const [fuel, setFuel] = useState<FuelInfo>({
     volumeLiters: undefined,
@@ -44,9 +44,9 @@ export default function EditExpense() {
     odometerKm: undefined,
     fuelType: "petrol",
   });
-  const [processingPhoto, setProcessingPhoto] = useState(false);
   const [saving, setSaving] = useState(false);
   const [details, setDetails] = useState<ExpenseAdvancedDetails>({});
+  const [dadRecovery, setDadRecovery] = useState(false);
   const detailReportInputRef = useRef<HTMLInputElement>(null);
 
   const updateDetails = (updates: Partial<ExpenseAdvancedDetails>) => {
@@ -93,7 +93,7 @@ export default function EditExpense() {
       setDate(format(parseISO(expense.date), "yyyy-MM-dd"));
       setPaymentMethodType(expense.paymentMethodType || "cash");
       setPaymentMethodId(expense.paymentMethodId || "");
-      setPhotoDataUrl(expense.photoDataUrl ?? null);
+      setReceiptPhotos(getExpenseReceiptUrls(expense));
       setIsFuel(expense.categoryId === "fuel");
       setDetails(expense.details ?? {});
       setFuel(
@@ -104,6 +104,7 @@ export default function EditExpense() {
           fuelType: "petrol",
         },
       );
+      setDadRecovery(Boolean(expense.dadRecovery) && expense.type === "income");
     }
   }, [expense]);
 
@@ -165,29 +166,6 @@ export default function EditExpense() {
     }
   };
 
-  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !file.type.startsWith("image/")) return;
-
-    setProcessingPhoto(true);
-    try {
-      const dataUrl = needsResizing(file)
-        ? await resizeImage(file)
-        : await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result as string);
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-          });
-      setPhotoDataUrl(dataUrl);
-    } catch (err) {
-      console.error(err);
-      alert("Failed to process image.");
-    } finally {
-      setProcessingPhoto(false);
-    }
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!id || !expense) return;
@@ -212,7 +190,7 @@ export default function EditExpense() {
       paymentMethodId: paymentMethodType === "card" ? paymentMethodId : undefined,
     };
 
-    if (photoDataUrl) updates.photoDataUrl = photoDataUrl;
+    updates.pendingReceiptPhotos = receiptPhotos;
     if (categoryId === "other" && customCategory.trim()) {
       updates.customCategory = customCategory.trim();
     } else if (categoryId !== "other") {
@@ -228,6 +206,8 @@ export default function EditExpense() {
     } else {
       updates.details = undefined;
     }
+
+    updates.dadRecovery = expense.type === "income" ? dadRecovery : false;
 
     setSaving(true);
     try {
@@ -754,6 +734,23 @@ export default function EditExpense() {
           />
         </div>
 
+        {expense.type === "income" && (
+          <label className="flex items-start gap-3 p-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] cursor-pointer">
+            <input
+              type="checkbox"
+              checked={dadRecovery}
+              onChange={(e) => setDadRecovery(e.target.checked)}
+              className="mt-1 h-4 w-4 rounded border-[var(--border)]"
+            />
+            <span className="text-sm font-medium text-[var(--foreground)] leading-snug">
+              Dad paid me back (reimbursement)
+              <span className="block text-xs text-[var(--text-muted)] mt-1 font-normal">
+                Counts against Dad&apos;s expenses for your monthly budget (oldest unpaid first).
+              </span>
+            </span>
+          </label>
+        )}
+
         <div>
           <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">Note</label>
           <textarea
@@ -766,45 +763,8 @@ export default function EditExpense() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">Receipt photo</label>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handlePhotoChange}
-            className="hidden"
-          />
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={processingPhoto}
-            className="w-full rounded-xl border-2 border-dashed border-[var(--border)] p-6 flex flex-col items-center gap-2 text-[var(--text-muted)] hover:border-[var(--accent)] disabled:opacity-60"
-          >
-            {processingPhoto ? (
-              <div className="flex flex-col items-center gap-2">
-                <XlviLoader
-                  boxColors={["var(--accent)"]}
-                  desktopSize="48px"
-                  mobileSize="36px"
-                />
-                <span>Processing...</span>
-              </div>
-            ) : photoDataUrl ? (
-              <>
-                <img
-                  src={photoDataUrl}
-                  alt="Receipt"
-                  className="max-h-32 rounded-lg object-cover"
-                />
-                <span className="text-sm">Change photo</span>
-              </>
-            ) : (
-              <>
-                <span className="text-3xl">📷</span>
-                <span>Tap to add or change receipt</span>
-              </>
-            )}
-          </button>
+          <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">Receipt photos</label>
+          <ReceiptPhotosField photos={receiptPhotos} onChange={setReceiptPhotos} disabled={saving} />
         </div>
 
         <div className="flex gap-2">
