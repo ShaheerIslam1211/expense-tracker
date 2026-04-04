@@ -1,4 +1,5 @@
 import type { ExpenseAdvancedDetails } from "../types";
+import { formatGroceryItemsSummary } from "./groceryCatalog";
 
 export interface DetailOption {
   value: string;
@@ -7,10 +8,11 @@ export interface DetailOption {
 
 export const DETAIL_SUBCATEGORY_OPTIONS: Record<string, DetailOption[]> = {
   food: [
-    { value: "groceries", label: "Groceries" },
     { value: "restaurant", label: "Restaurant / Dining Out" },
     { value: "bakery", label: "Bakery / Snacks" },
     { value: "household", label: "Household Supplies" },
+    /** Old trips only — new grocery lists use the **Groceries** category. */
+    { value: "groceries", label: "Groceries (legacy)" },
   ],
   dad: [
     { value: "personal-shopping", label: "Personal Shopping" },
@@ -113,9 +115,12 @@ export function buildDetailsSummary(details: ExpenseAdvancedDetails) {
     details.labTests?.map((value) => LAB_TEST_OPTIONS.find((option) => option.value === value)?.label ?? value) ?? [];
   const bikeRepairLabels =
     details.repairTasks?.map((value) => BIKE_REPAIR_OPTIONS.find((option) => option.value === value)?.label ?? value) ?? [];
+  const grocerySummary =
+    details.groceryItems?.length ? `Grocery: ${formatGroceryItemsSummary(details.groceryItems)}` : "";
   const parts = [
     details.subCategory,
     details.itemType,
+    grocerySummary,
     details.variant,
     details.provider,
     details.billType,

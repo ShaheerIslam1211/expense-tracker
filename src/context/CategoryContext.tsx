@@ -6,119 +6,165 @@ import {
   useMemo,
   useState,
   type ReactNode,
-} from 'react'
+} from "react";
 import {
   collection,
   deleteDoc,
   doc,
   onSnapshot,
-  orderBy,
-  query,
   setDoc,
   updateDoc,
-} from 'firebase/firestore'
-import { CATEGORIES, type Category } from '../types'
-import { db } from '../firebase'
-import { useAuth } from './AuthContext'
+} from "firebase/firestore";
+import type { Category } from "../types";
+import { db } from "../firebase";
+import { useAuth } from "./AuthContext";
+import { isLegacyShadowCategoryId, normalizeCategoryId, RESERVED_CATEGORY_DOC_IDS } from "../utils/categoryNormalization";
+import { restoreMissingDefaultCategories as restoreMissingDefaultCategoriesApi, syncCategoryDefaults } from "../utils/syncCategoryDefaults";
+
+export type CategoryUpdatePayload = Partial<
+  Pick<Category, "name" | "icon" | "color" | "forIncome" | "forExpense" | "sortOrder">
+>;
 
 interface CategoryContextValue {
-  categories: Category[]
-  customCategories: Category[]
-  addCategory: (input: Pick<Category, 'name' | 'icon' | 'color'>) => Promise<string>
-  updateCategory: (id: string, updates: Partial<Pick<Category, 'name' | 'icon' | 'color'>>) => Promise<void>
-  deleteCategory: (id: string) => Promise<void>
-  getCategoryById: (id: string) => Category | undefined
-  isSystemCategory: (id: string) => boolean
+  categories: Category[];
+  customCategories: Category[];
+  addCategory: (input: Pick<Category, "name" | "icon" | "color">) => Promise<string>;
+  updateCategory: (id: string, updates: CategoryUpdatePayload) => Promise<void>;
+  deleteCategory: (id: string) => Promise<void>;
+  restoreMissingDefaultCategories: () => Promise<void>;
+  getCategoryById: (id: string) => Category | undefined;
+  isSystemCategory: (id: string) => boolean;
 }
 
-const CategoryContext = createContext<CategoryContextValue | null>(null)
+const CategoryContext = createContext<CategoryContextValue | null>(null);
+
+function mapCategoryDoc(id: string, data: Record<string, unknown>): Category {
+  const forIncome = data.forIncome === true;
+  const forExpense = data.forExpense !== false;
+  return {
+    id,
+    name: typeof data.name === "string" ? data.name : "Category",
+    icon: typeof data.icon === "string" ? data.icon : "🏷️",
+    color: typeof data.color === "string" ? data.color : "#64748b",
+    isSystem: data.isSystem === true,
+    sortOrder: typeof data.sortOrder === "number" ? data.sortOrder : 10_000,
+    forIncome,
+    forExpense,
+  };
+}
 
 export function CategoryProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth()
-  const [customCategories, setCustomCategories] = useState<Category[]>([])
+  const { user } = useAuth();
+  const [categories, setCategories] = useState<Category[]>([]);
 
   useEffect(() => {
     if (!user) {
-      setCustomCategories([])
-      return
+      setCategories([]);
+      return;
     }
-    const q = query(collection(db, 'users', user.uid, 'categories'), orderBy('name', 'asc'))
-    const unsub = onSnapshot(q, (snap) => {
-      const next: Category[] = snap.docs.map((d) => {
-        const data = d.data() as Omit<Category, 'id'>
-        return {
-          id: d.id,
-          name: data.name,
-          icon: data.icon || '🏷️',
-          color: data.color || '#64748b',
-          isSystem: false,
-        }
-      })
-      setCustomCategories(next)
-    })
-    return () => unsub()
-  }, [user])
+    const uid = user.uid;
+    let unsub: (() => void) | undefined;
 
-  const categories = useMemo(() => {
-    const systemById = new Set(CATEGORIES.map((c) => c.id))
-    const safeCustom = customCategories.filter((c) => !systemById.has(c.id))
-    return [...CATEGORIES, ...safeCustom]
-  }, [customCategories])
+    void (async () => {
+      try {
+        await syncCategoryDefaults(uid);
+      } catch (e) {
+        console.error("Category migration failed:", e);
+      }
 
-  const isSystemCategory = useCallback((id: string) => CATEGORIES.some((c) => c.id === id), [])
+      unsub = onSnapshot(collection(db, "users", uid, "categories"), (snap) => {
+        const next: Category[] = snap.docs
+          .map((d) => mapCategoryDoc(d.id, d.data() as Record<string, unknown>))
+          .filter((c) => !isLegacyShadowCategoryId(c.id));
+        next.sort(
+          (a, b) =>
+            (a.sortOrder ?? 10_000) - (b.sortOrder ?? 10_000) || a.name.localeCompare(b.name),
+        );
+        setCategories(next);
+      });
+    })();
+
+    return () => {
+      unsub?.();
+    };
+  }, [user]);
+
+  const customCategories = useMemo(() => categories.filter((c) => !c.isSystem), [categories]);
+
+  const isSystemCategory = useCallback(
+    (id: string) => categories.find((c) => c.id === id)?.isSystem === true,
+    [categories],
+  );
 
   const addCategory = useCallback(
-    async (input: Pick<Category, 'name' | 'icon' | 'color'>): Promise<string> => {
-      if (!user) throw new Error('You must be signed in to add a category.')
-      const base = input.name.trim()
-      if (!base) throw new Error('Category name is required.')
+    async (input: Pick<Category, "name" | "icon" | "color">): Promise<string> => {
+      if (!user) throw new Error("You must be signed in to add a category.");
+      const base = input.name.trim();
+      if (!base) throw new Error("Category name is required.");
       const generatedId =
         base
           .toLowerCase()
-          .replace(/[^a-z0-9]+/g, '-')
-          .replace(/^-+|-+$/g, '')
-          .slice(0, 40) || `cat-${Date.now()}`
-      const alreadyExists = categories.some(
-        (c) => c.id === generatedId || c.name.toLowerCase() === base.toLowerCase(),
-      )
-      if (alreadyExists) throw new Error('A category with this name already exists.')
-      await setDoc(doc(db, 'users', user.uid, 'categories', generatedId), {
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-+|-+$/g, "")
+          .slice(0, 40) || `cat-${Date.now()}`;
+      const alreadyExists =
+        categories.some((c) => c.id === generatedId || c.name.toLowerCase() === base.toLowerCase()) ||
+        RESERVED_CATEGORY_DOC_IDS.has(generatedId);
+      if (alreadyExists) throw new Error("A category with this name already exists.");
+      const maxSort = categories.reduce((m, c) => Math.max(m, c.sortOrder ?? 0), 0);
+      await setDoc(doc(db, "users", user.uid, "categories", generatedId), {
         name: base,
-        icon: input.icon?.trim() || '🏷️',
-        color: input.color || '#64748b',
+        icon: input.icon?.trim() || "🏷️",
+        color: input.color || "#64748b",
         createdAt: new Date().toISOString(),
-      })
-      return generatedId
+        isSystem: false,
+        sortOrder: maxSort + 1,
+        forIncome: false,
+        forExpense: true,
+      });
+      return generatedId;
     },
     [user, categories],
-  )
+  );
 
   const updateCategory = useCallback(
-    async (id: string, updates: Partial<Pick<Category, 'name' | 'icon' | 'color'>>) => {
-      if (!user || isSystemCategory(id)) return
-      const ref = doc(db, 'users', user.uid, 'categories', id)
-      await updateDoc(ref, {
-        ...(updates.name != null ? { name: updates.name.trim() } : {}),
-        ...(updates.icon != null ? { icon: updates.icon.trim() || '🏷️' } : {}),
-        ...(updates.color != null ? { color: updates.color } : {}),
-      })
+    async (id: string, updates: CategoryUpdatePayload) => {
+      if (!user) return;
+      const ref = doc(db, "users", user.uid, "categories", id);
+      const payload: Record<string, unknown> = {};
+      if (updates.name != null) payload.name = updates.name.trim();
+      if (updates.icon != null) payload.icon = updates.icon.trim() || "🏷️";
+      if (updates.color != null) payload.color = updates.color;
+      if (updates.forIncome != null) payload.forIncome = updates.forIncome;
+      if (updates.forExpense != null) payload.forExpense = updates.forExpense;
+      if (updates.sortOrder != null) payload.sortOrder = updates.sortOrder;
+      if (Object.keys(payload).length === 0) return;
+      await updateDoc(ref, payload);
     },
-    [user, isSystemCategory]
-  )
+    [user],
+  );
 
   const deleteCategory = useCallback(
     async (id: string) => {
-      if (!user || isSystemCategory(id)) return
-      const ref = doc(db, 'users', user.uid, 'categories', id)
-      await deleteDoc(ref)
+      if (!user) return;
+      const ref = doc(db, "users", user.uid, "categories", id);
+      await deleteDoc(ref);
     },
-    [user, isSystemCategory]
-  )
+    [user],
+  );
+
+  const restoreMissingDefaultCategories = useCallback(async () => {
+    if (!user) return;
+    await restoreMissingDefaultCategoriesApi(user.uid);
+  }, [user]);
 
   const getCategoryById = useCallback(
-    (id: string) => categories.find((c) => c.id === id),
-    [categories]
-  )
+    (id: string) => {
+      const canonical = normalizeCategoryId(id);
+      return categories.find((c) => c.id === canonical);
+    },
+    [categories],
+  );
 
   const value = useMemo(
     () => ({
@@ -127,18 +173,27 @@ export function CategoryProvider({ children }: { children: ReactNode }) {
       addCategory,
       updateCategory,
       deleteCategory,
+      restoreMissingDefaultCategories,
       getCategoryById,
       isSystemCategory,
     }),
-    [categories, customCategories, addCategory, updateCategory, deleteCategory, getCategoryById, isSystemCategory]
-  )
+    [
+      categories,
+      customCategories,
+      addCategory,
+      updateCategory,
+      deleteCategory,
+      restoreMissingDefaultCategories,
+      getCategoryById,
+      isSystemCategory,
+    ],
+  );
 
-  return <CategoryContext.Provider value={value}>{children}</CategoryContext.Provider>
+  return <CategoryContext.Provider value={value}>{children}</CategoryContext.Provider>;
 }
 
 export function useCategories() {
-  const ctx = useContext(CategoryContext)
-  if (!ctx) throw new Error('useCategories must be used within CategoryProvider')
-  return ctx
+  const ctx = useContext(CategoryContext);
+  if (!ctx) throw new Error("useCategories must be used within CategoryProvider");
+  return ctx;
 }
-

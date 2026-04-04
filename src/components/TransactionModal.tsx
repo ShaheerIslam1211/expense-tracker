@@ -23,11 +23,13 @@ import { useCurrency } from "../hooks/useCurrency";
 import { getCurrencyConfig } from "../utils/currency";
 import { scanReceiptImage } from "../utils/scanReceiptImage";
 import { suggestCategory } from "../utils/autoCategorize";
+import { normalizeCategoryId } from "../utils/categoryNormalization";
 import { useModalBehavior } from "../hooks/useModalBehavior";
 import { useAppSettings } from "../context/AppSettingsContext";
 import { resizeDataUrl } from "../utils/imageResize";
 import { getExpenseReceiptUrls, receiptImageToDataUrlForOcr } from "../utils/expenseReceiptStorage";
 import { ReceiptPhotosField } from "./ReceiptPhotosField";
+import { GroceryItemsField } from "./GroceryItemsField";
 import type {
   Expense,
   CategoryId,
@@ -97,8 +99,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
   const filteredCategories = useMemo(
     () =>
       categories.filter((c) => {
-        if (type === "income") return ["salary", "bonus", "investment", "other"].includes(c.id);
-        return !["salary", "bonus", "investment"].includes(c.id);
+        if (type === "income") return c.forIncome === true;
+        return c.forExpense === true;
       }),
     [categories, type],
   );
@@ -107,7 +109,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
     if (editingTransaction) {
       setType(editingTransaction.type || "expense");
       setAmount(String(editingTransaction.amount));
-      setCategoryId(editingTransaction.categoryId);
+      setCategoryId(normalizeCategoryId(editingTransaction.categoryId));
       setNote(editingTransaction.note);
       setDate(format(parseISO(editingTransaction.date), "yyyy-MM-dd"));
       setMerchant(editingTransaction.merchant || "");
@@ -176,14 +178,19 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
     const selectedName = categories.find((c) => c.id === categoryId)?.name;
     if (validOptions.length === 0) {
       if (isBikeRepairCategory(categoryId, selectedName)) return;
+      if (normalizeCategoryId(categoryId) === "grocery") {
+        setDetails((prev) => ({ groceryItems: prev.groceryItems ?? [] }));
+        return;
+      }
       setDetails({});
       return;
     }
     setDetails((prev) => {
-      if (!prev.subCategory || !validOptions.some((option) => option.value === prev.subCategory)) {
-        return { ...prev, subCategory: validOptions[0].value };
+      const base = { ...prev, groceryItems: undefined };
+      if (!base.subCategory || !validOptions.some((option) => option.value === base.subCategory)) {
+        return { ...base, subCategory: validOptions[0].value };
       }
-      return prev;
+      return base;
     });
   }, [categoryId, categories]);
 
@@ -302,8 +309,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
   };
 
   const supportsAdvancedDetails = type === "expense" && Boolean(DETAIL_SUBCATEGORY_OPTIONS[categoryId]?.length);
-  const isFoodGrocery = categoryId === "food" && details.subCategory === "groceries";
-  const isCookingOil = isFoodGrocery && details.itemType === "cooking-oil";
+  const isGroceryCategory = normalizeCategoryId(categoryId) === "grocery";
+  const isCookingOil = isGroceryCategory && (details.groceryItems?.includes("cooking-oil") ?? false);
   const isBillsMobilePackage = categoryId === "bills" && details.subCategory === "mobile-package";
   const isDadInspectorVisit = categoryId === "dad" && details.subCategory === "inspector-visit";
   const isTransportRideApp = categoryId === "transport" && ["indrive", "yango", "uber-careem"].includes(details.subCategory ?? "");
@@ -391,16 +398,23 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
 
     setIsSaving(true);
 
-    const normalizedDetails = supportsAdvancedDetails
-      ? ({
+    const normalizedDetails: ExpenseAdvancedDetails | undefined = (() => {
+      if (supportsAdvancedDetails) {
+        return {
           ...Object.fromEntries(
             Object.entries(details).filter(([, value]) => typeof value === "string" && value.trim().length > 0),
           ),
           ...(details.repairTasks?.length ? { repairTasks: details.repairTasks } : {}),
           ...(details.labTests?.length ? { labTests: details.labTests } : {}),
           ...(details.reports?.length ? { reports: details.reports } : {}),
-        } as ExpenseAdvancedDetails)
-      : undefined;
+          ...(details.groceryItems?.length ? { groceryItems: details.groceryItems } : {}),
+        } as ExpenseAdvancedDetails;
+      }
+      if (normalizeCategoryId(categoryId) === "grocery" && details.groceryItems?.length) {
+        return { groceryItems: details.groceryItems };
+      }
+      return undefined;
+    })();
     const detailsSummary = normalizedDetails ? buildDetailsSummary(normalizedDetails) : "";
     const normalizedNote = note.trim() || detailsSummary;
 
@@ -413,7 +427,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
       date: new Date(date).toISOString(),
       merchant: merchant || undefined,
       reference: reference || undefined,
-      details: normalizedDetails && Object.keys(normalizedDetails).length > 0 ? normalizedDetails : undefined,
+      details:
+        normalizedDetails && Object.keys(normalizedDetails).length > 0 ? normalizedDetails : undefined,
       paymentMethodType,
       paymentMethodId: paymentMethodType === "card" ? paymentMethodId : undefined,
     };
@@ -660,6 +675,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
                             updateDetails({
                               subCategory: e.target.value,
                               itemType: undefined,
+                              groceryItems: undefined,
                               variant: undefined,
                               packageType: undefined,
                               inspectionType: undefined,
@@ -934,6 +950,16 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
                         </div>
                       )}
                     </div>
+                  </div>
+                )}
+
+                {isGroceryCategory && (
+                  <div className="p-4 rounded-2xl border border-border bg-accent/10">
+                    <GroceryItemsField
+                      variant="card"
+                      selected={details.groceryItems ?? []}
+                      onChange={(groceryItems) => updateDetails({ groceryItems })}
+                    />
                   </div>
                 )}
 

@@ -6,7 +6,9 @@ import { useExpenses } from "../context/ExpenseContext";
 import { useCategories } from "../context/CategoryContext";
 import { useCards } from "../context/CardContext";
 import { useToast } from "../context/ToastContext";
+import { GroceryItemsField } from "../components/GroceryItemsField";
 import { type CategoryId, type FuelInfo, type PaymentMethodType, type ExpenseAdvancedDetails } from "../types";
+import { normalizeCategoryId } from "../utils/categoryNormalization";
 import { useCurrency } from "../hooks/useCurrency";
 import { scanReceiptImage } from "../utils/scanReceiptImage";
 import { resizeDataUrl } from "../utils/imageResize";
@@ -140,8 +142,8 @@ export default function AddExpense() {
   };
 
   const supportsAdvancedDetails = Boolean(DETAIL_SUBCATEGORY_OPTIONS[categoryId]?.length);
-  const isFoodGrocery = categoryId === "food" && details.subCategory === "groceries";
-  const isCookingOil = isFoodGrocery && details.itemType === "cooking-oil";
+  const isGroceryCategory = normalizeCategoryId(categoryId) === "grocery";
+  const isCookingOil = isGroceryCategory && (details.groceryItems?.includes("cooking-oil") ?? false);
   const isHealthInsulin = categoryId === "health" && (details.subCategory?.startsWith("insulin") ?? false);
   const isHealthLabTest = categoryId === "health" && details.subCategory === "lab-test";
   const isBillsMobilePackage = categoryId === "bills" && details.subCategory === "mobile-package";
@@ -155,14 +157,19 @@ export default function AddExpense() {
     const selectedName = categories.find((c) => c.id === categoryId)?.name;
     if (options.length === 0) {
       if (isBikeRepairCategory(categoryId, selectedName)) return;
+      if (normalizeCategoryId(categoryId) === "grocery") {
+        setDetails((prev) => ({ groceryItems: prev.groceryItems ?? [] }));
+        return;
+      }
       setDetails({});
       return;
     }
     setDetails((prev) => {
-      if (!prev.subCategory || !options.some((option) => option.value === prev.subCategory)) {
-        return { ...prev, subCategory: options[0].value };
+      const base = { ...prev, groceryItems: undefined };
+      if (!base.subCategory || !options.some((option) => option.value === base.subCategory)) {
+        return { ...base, subCategory: options[0].value };
       }
-      return prev;
+      return base;
     });
   }, [categoryId, categories]);
 
@@ -211,7 +218,7 @@ export default function AddExpense() {
           parsed.receiptType === "health"
             ? "health"
             : parsed.receiptType === "grocery"
-              ? "food"
+              ? "grocery"
               : suggestCategory(parsed.merchant);
 
         // Log category suggestion
@@ -335,6 +342,7 @@ export default function AddExpense() {
       ...(details.repairTasks?.length ? { repairTasks: details.repairTasks } : {}),
       ...(details.labTests?.length ? { labTests: details.labTests } : {}),
       ...(details.reports?.length ? { reports: details.reports } : {}),
+      ...(details.groceryItems?.length ? { groceryItems: details.groceryItems } : {}),
     };
     const detailSummary = buildDetailsSummary(normalizedDetails);
 
@@ -356,7 +364,10 @@ export default function AddExpense() {
     if (isFuel && (fuel.volumeLiters ?? fuel.odometerKm)) {
       expenseData.fuel = fuel;
     }
-    if (supportsAdvancedDetails && Object.keys(normalizedDetails).length > 0) {
+    const shouldSaveDetails =
+      (supportsAdvancedDetails && Object.keys(normalizedDetails).length > 0) ||
+      (normalizeCategoryId(categoryId) === "grocery" && (details.groceryItems?.length ?? 0) > 0);
+    if (shouldSaveDetails) {
       expenseData.details = normalizedDetails;
     }
 
@@ -378,7 +389,11 @@ export default function AddExpense() {
   const hasScannedItems = scannedItems.length > 0;
   const hasScannedData = hasScannedItems || parsedMerchant || parsedTotal;
   const isHealthReceipt = parsedReceiptType === "health" || categoryId === "health";
-  const isGroceryReceipt = parsedReceiptType === "grocery" || categoryId === "food" || categoryId === "shopping";
+  const isGroceryReceipt =
+    parsedReceiptType === "grocery" ||
+    normalizeCategoryId(categoryId) === "grocery" ||
+    categoryId === "food" ||
+    categoryId === "shopping";
   const isUncategorized = categoryId === "other" && !customCategory.trim();
   const showUncategorizedWarning = hasScannedData && isUncategorized;
 
@@ -630,6 +645,7 @@ export default function AddExpense() {
                   updateDetails({
                     subCategory: e.target.value,
                     itemType: undefined,
+                    groceryItems: undefined,
                     dosagePlan: undefined,
                     quantity: undefined,
                     unit: undefined,
@@ -950,6 +966,13 @@ export default function AddExpense() {
             </div>
           )}
         </div>
+
+        {isGroceryCategory && (
+          <GroceryItemsField
+            selected={details.groceryItems ?? []}
+            onChange={(groceryItems) => updateDetails({ groceryItems })}
+          />
+        )}
 
         {(isFuelCategory || isFuel) && (
           <div className="rounded-xl bg-(--surface) border border-(--fuel)/30 p-4 space-y-3">

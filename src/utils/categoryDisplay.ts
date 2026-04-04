@@ -1,9 +1,10 @@
-import { CATEGORIES } from '../types'
-import type { Expense } from '../types'
+import type { Category, Expense } from '../types'
+import { normalizeCategoryId } from './categoryNormalization'
 
-export function getCategoryDisplayName(expense: Expense): string {
-  const cat = CATEGORIES.find((c) => c.id === expense.categoryId)
-  if (expense.categoryId === 'other' && expense.customCategory?.trim()) {
+export function getCategoryDisplayName(expense: Expense, categories: Pick<Category, 'id' | 'name'>[]): string {
+  const cid = normalizeCategoryId(expense.categoryId)
+  const cat = categories.find((c) => c.id === cid)
+  if (cid === 'other' && expense.customCategory?.trim()) {
     return expense.customCategory.trim()
   }
   if (cat?.name) return cat.name

@@ -1,4 +1,5 @@
 import type { Expense } from '../types';
+import { getCategoryDisplayName } from './categoryDisplay';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -9,13 +10,13 @@ function csvCell(value: string | number): string {
   return `"${s.replace(/"/g, '""')}"`;
 }
 
-export const exportToCSV = (expenses: Expense[]) => {
+export const exportToCSV = (expenses: Expense[], categories: Parameters<typeof getCategoryDisplayName>[1]) => {
   const headers = ['Date', 'Type', 'Category', 'Amount', 'Currency', 'Note', 'Payment Method', 'Merchant'];
   
   const rows = expenses.map(e => [
     new Date(e.date).toLocaleDateString(),
     e.type.toUpperCase(),
-    e.categoryId,
+    getCategoryDisplayName(e, categories),
     e.amount,
     e.currency,
     e.note || '',
@@ -40,14 +41,14 @@ export const exportToCSV = (expenses: Expense[]) => {
   document.body.removeChild(link);
 };
 
-export const exportToPDF = (expenses: Expense[]) => {
+export const exportToPDF = (expenses: Expense[], categories: Parameters<typeof getCategoryDisplayName>[1]) => {
   const doc = new jsPDF();
   const headers = [['Date', 'Type', 'Category', 'Amount', 'Currency', 'Note', 'Payment Method']];
   
   const data = expenses.map(e => [
     new Date(e.date).toLocaleDateString(),
     e.type.toUpperCase(),
-    e.categoryId,
+    getCategoryDisplayName(e, categories),
     e.amount.toString(),
     e.currency,
     e.note || '',

@@ -1,7 +1,11 @@
 rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
-    match /users/{userId}/expenses/{expenseId}/{fileName} {
+    /**
+     * All receipt objects under a user's expenses folder (any file name, e.g. p_<uuid>.jpg).
+     * Recursive match covers upload, download, delete, and listAll() on expense folders.
+     */
+    match /users/{userId}/expenses/{path=**} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
   }

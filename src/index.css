@@ -166,6 +166,20 @@ button, a, input, select, textarea {
   --radius-xl: 0.85rem;
 }
 
+:root.app-high-contrast {
+  --border: color-mix(in srgb, var(--text-muted) 70%, var(--border));
+}
+
+:root.app-dense-lists [data-expense-row="1"] {
+  padding: 0.5rem 0.75rem;
+}
+
+@media (min-width: 640px) {
+  :root.app-dense-lists [data-expense-row="1"] {
+    padding: 0.5rem 1rem;
+  }
+}
+
 /* Safe Area Insets for Mobile PWA */
 .safe-bottom {
   padding-bottom: env(safe-area-inset-bottom);
