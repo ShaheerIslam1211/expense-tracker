@@ -138,14 +138,14 @@ export default function Insights() {
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <div className="flex bg-card border border-border rounded-2xl p-1 shadow-sm w-full sm:w-auto">
             <button
-              onClick={() => exportToCSV(yearExpenses)}
+              onClick={() => exportToCSV(yearExpenses, categories)}
               className="flex-1 sm:flex-none px-3 sm:px-4 py-2 hover:bg-accent rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
             >
               <Download className="h-4 w-4" />
               CSV
             </button>
             <button
-              onClick={() => exportToPDF(yearExpenses)}
+              onClick={() => exportToPDF(yearExpenses, categories)}
               className="flex-1 sm:flex-none px-3 sm:px-4 py-2 hover:bg-accent rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2"
             >
               <FileText className="h-4 w-4" />

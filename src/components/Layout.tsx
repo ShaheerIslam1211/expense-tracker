@@ -194,7 +194,12 @@ export default function Layout() {
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 md:pl-64">
         <div className="flex-1 md:overflow-y-auto pb-[calc(7.5rem+env(safe-area-inset-bottom))] md:pb-8">
-          <div className={cn("max-w-6xl mx-auto px-4 sm:px-6 lg:px-8", settings.compactLayout ? "py-5" : "py-8")}>
+          <div
+            className={cn(
+              "w-full max-w-7xl 2xl:max-w-[90rem] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10",
+              settings.compactLayout ? "py-5" : "py-8",
+            )}
+          >
             <Outlet />
           </div>
         </div>

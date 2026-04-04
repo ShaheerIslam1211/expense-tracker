@@ -1,0 +1,28 @@
+import type { Category } from "../types";
+
+/** Default categories written to Firestore when missing; routing fields re-synced on login. */
+export type CategorySeed = Category & {
+  sortOrder: number;
+  forIncome: boolean;
+  forExpense: boolean;
+};
+
+export const DEFAULT_CATEGORIES: CategorySeed[] = [
+  { id: "fuel", name: "Fuel", icon: "⛽", color: "#eab308", isSystem: true, sortOrder: 0, forIncome: false, forExpense: true },
+  { id: "food", name: "Food & Dining", icon: "🍽️", color: "#22c55e", isSystem: true, sortOrder: 1, forIncome: false, forExpense: true },
+  { id: "grocery", name: "Groceries", icon: "🛒", color: "#16a34a", isSystem: true, sortOrder: 2, forIncome: false, forExpense: true },
+  { id: "transport", name: "Transport", icon: "🚗", color: "#3b82f6", isSystem: true, sortOrder: 3, forIncome: false, forExpense: true },
+  { id: "utilities", name: "Utilities", icon: "💡", color: "#f59e0b", isSystem: true, sortOrder: 4, forIncome: false, forExpense: true },
+  { id: "shopping", name: "Shopping", icon: "🛒", color: "#ec4899", isSystem: true, sortOrder: 5, forIncome: false, forExpense: true },
+  { id: "health", name: "Health", icon: "❤️", color: "#ef4444", isSystem: true, sortOrder: 6, forIncome: false, forExpense: true },
+  { id: "entertainment", name: "Entertainment", icon: "🎬", color: "#a855f7", isSystem: true, sortOrder: 7, forIncome: false, forExpense: true },
+  { id: "bills", name: "Bills", icon: "📄", color: "#06b6d4", isSystem: true, sortOrder: 8, forIncome: false, forExpense: true },
+  { id: "salary", name: "Salary", icon: "💰", color: "#10b981", isSystem: true, sortOrder: 9, forIncome: true, forExpense: false },
+  { id: "bonus", name: "Bonus", icon: "🎁", color: "#8b5cf6", isSystem: true, sortOrder: 10, forIncome: true, forExpense: false },
+  { id: "investment", name: "Investment", icon: "📈", color: "#3b82f6", isSystem: true, sortOrder: 11, forIncome: true, forExpense: false },
+  { id: "savings", name: "Savings / Goal deposit", icon: "🏦", color: "#059669", isSystem: true, sortOrder: 12, forIncome: false, forExpense: true },
+  { id: "dad", name: "Dad's Expenses", icon: "👨", color: "#0ea5e9", isSystem: true, sortOrder: 13, forIncome: false, forExpense: true },
+  { id: "other", name: "Other", icon: "📌", color: "#71717a", isSystem: true, sortOrder: 14, forIncome: true, forExpense: true },
+];
+
+export const SEEDED_SYSTEM_CATEGORY_IDS = new Set(DEFAULT_CATEGORIES.map((c) => c.id));

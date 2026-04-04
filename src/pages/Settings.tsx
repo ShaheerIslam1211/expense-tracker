@@ -8,7 +8,6 @@ import { useSavings } from "../context/SavingsContext";
 import { useTheme } from "../context/ThemeContext";
 import {
   User,
-  Settings as SettingsIcon,
   Palette,
   Camera,
   Check,
@@ -25,6 +24,9 @@ import {
   WandSparkles,
   Upload,
   Download as DownloadIcon,
+  LayoutDashboard,
+  Shield,
+  Tag,
 } from "lucide-react";
 import { cn } from "../utils/cn";
 import { useCurrency } from "../hooks/useCurrency";
@@ -36,6 +38,40 @@ import { resizeDataUrl } from "../utils/imageResize";
 import { getCountries, getCountryCallingCode, type CountryCode } from "libphonenumber-js";
 import Cropper, { type Area, type Point } from "react-easy-crop";
 import { useModalBehavior } from "../hooks/useModalBehavior";
+import { normalizeCategoryId } from "../utils/categoryNormalization";
+import { CategoryManagerPanel } from "../components/settings/CategoryManagerPanel";
+
+function ProSwitch({
+  checked,
+  onChange,
+  disabled,
+}: {
+  checked: boolean;
+  onChange: (next: boolean) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={cn(
+        "relative h-8 w-14 shrink-0 rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+        checked ? "bg-primary" : "bg-muted",
+        disabled && "opacity-50",
+      )}
+    >
+      <span
+        className={cn(
+          "absolute top-1 left-1 block h-6 w-6 rounded-full bg-background shadow-md transition-transform duration-200",
+          checked && "translate-x-6",
+        )}
+      />
+    </button>
+  );
+}
 
 function toCountryCode(input?: string): CountryCode | "" {
   if (!input) return "";
@@ -82,7 +118,7 @@ export default function Settings() {
   const { theme: currentTheme, actualTheme, setTheme } = useTheme();
   const [budgetInput, setBudgetInput] = useState(String(monthlyBudget));
   const [saved, setSaved] = useState(false);
-  const { categories, deleteCategory, addCategory } = useCategories();
+  const { categories, addCategory, updateCategory, deleteCategory, restoreMissingDefaultCategories } = useCategories();
   const { savingsGoals, addSavingsGoal, deleteSavingsGoal } = useSavings();
   const { settings, updateSettings, resetSettings, applyPreset, exportSettings, importSettings } = useAppSettings();
   const { hideSensitiveValues, toggleSensitiveValues } = useSensitiveMode();
@@ -113,11 +149,6 @@ export default function Settings() {
   const { formatAmount } = useCurrency();
 
   const [activeTab, setActiveTab] = useState<"profile" | "categories" | "system">("profile");
-
-  // New Category state
-  const [newCatName, setNewCatName] = useState("");
-  const [newCatIcon, setNewCatIcon] = useState("💰");
-  const [newCatColor, setNewCatColor] = useState("#6366f1");
 
   // New Savings Goal state
   const [newGoalName, setNewGoalName] = useState("");
@@ -237,22 +268,6 @@ export default function Settings() {
       console.error("Failed to update profile:", error);
     } finally {
       setIsUpdatingProfile(false);
-    }
-  };
-
-  const handleAddCategory = async () => {
-    if (!newCatName.trim()) return;
-    try {
-      await addCategory({
-        name: newCatName.trim(),
-        icon: newCatIcon,
-        color: newCatColor,
-      });
-      setNewCatName("");
-      showToast("Category added", "success");
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to add category";
-      showToast(message, "error");
     }
   };
 
@@ -383,7 +398,7 @@ export default function Settings() {
       e.date,
       e.note || e.merchant || "Expense",
       e.amount,
-      categories.find((c) => c.id === e.categoryId)?.name || e.categoryId,
+      categories.find((c) => c.id === normalizeCategoryId(e.categoryId))?.name || e.categoryId,
       e.paymentMethodType,
     ]);
 
@@ -402,8 +417,8 @@ export default function Settings() {
 
   const tabs = [
     { id: "profile", label: "Profile", icon: User },
-    { id: "categories", label: "Categories", icon: SettingsIcon },
-    { id: "system", label: "System", icon: Palette },
+    { id: "categories", label: "Categories", icon: Tag },
+    { id: "system", label: "System", icon: LayoutDashboard },
   ];
 
   const themes = [
@@ -413,47 +428,62 @@ export default function Settings() {
   ];
 
   return (
-    <div className="space-y-8 pb-12">
-      <div>
-        <h1 className="text-4xl font-black tracking-tight text-foreground">Settings</h1>
-        <p className="text-muted-foreground mt-1 font-medium">Customize your SpendWise experience.</p>
-      </div>
-
-      <div className="flex flex-col md:flex-row gap-8">
-        {/* Settings Sidebar */}
-        <aside className="w-full md:w-64 space-y-2">
-          {tabs.map((tab) => (
+    <div className="min-h-full w-full pb-20">
+      <div className="w-full">
+        <header className="flex flex-col gap-4 border-b border-border pb-6 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h1 className="text-3xl font-black tracking-tight text-foreground md:text-4xl">Settings</h1>
+            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+              Profile, categories, budget, and app preferences — full width layout.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-lg border border-border bg-card px-3 py-2 text-xs font-bold text-muted-foreground">
+              {categories.length} categories
+            </span>
+            <span className="rounded-lg border border-border bg-card px-3 py-2 text-xs font-bold text-muted-foreground">
+              Theme: {currentTheme}
+            </span>
             <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as "profile" | "categories" | "system")}
-              className={cn(
-                "w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all duration-200",
-                activeTab === tab.id
-                  ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground",
-              )}
-            >
-              <tab.icon className="h-5 w-5" />
-              {tab.label}
-            </button>
-          ))}
-
-          <div className="pt-4 mt-4 border-t border-border">
-            <button
+              type="button"
               onClick={signOut}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm text-destructive hover:bg-destructive/10 transition-all duration-200"
+              className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-4 py-2 text-sm font-bold text-destructive transition hover:bg-destructive/10"
             >
-              <LogOut className="h-5 w-5" />
-              Sign Out
+              <LogOut className="h-4 w-4" />
+              Sign out
             </button>
           </div>
-        </aside>
+        </header>
 
-        {/* Settings Content */}
-        <div className="flex-1 space-y-8">
+        <nav
+          className="no-scrollbar -mx-1 flex gap-1 overflow-x-auto border-b border-border px-1 sm:gap-2"
+          aria-label="Settings sections"
+        >
+          {tabs.map((tab) => {
+            const active = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id as "profile" | "categories" | "system")}
+                className={cn(
+                  "flex shrink-0 items-center gap-2 border-b-2 px-4 py-3.5 text-sm font-bold transition-colors sm:px-5",
+                  active
+                    ? "border-primary text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <tab.icon className="h-4 w-4 shrink-0" />
+                {tab.label}
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className="mt-8 w-full min-w-0 space-y-8">
           {activeTab === "profile" && (
             <section className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="bg-card border border-border rounded-3xl p-8 shadow-sm space-y-8">
+              <div className="space-y-8 rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8">
                 <div className="bg-accent/20 border border-border/60 rounded-2xl p-4">
                   <div className="flex items-center justify-between gap-4">
                     <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">
@@ -729,8 +759,8 @@ export default function Settings() {
           )}
 
           {activeTab === "system" && (
-            <section className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="bg-card border border-border rounded-3xl p-8 shadow-sm space-y-6">
+            <section className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <div className="space-y-8 rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8">
                 <h3 className="text-xl font-black flex items-center gap-2 text-foreground">
                   <Palette className="h-6 w-6 text-primary" /> App Configuration
                 </h3>
@@ -979,7 +1009,9 @@ export default function Settings() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <button
                         type="button"
-                        onClick={() => updateSettings({ modalLockBackgroundScroll: !settings.modalLockBackgroundScroll })}
+                        onClick={() =>
+                          updateSettings({ modalLockBackgroundScroll: !settings.modalLockBackgroundScroll })
+                        }
                         className={cn(
                           "px-4 py-3 rounded-xl border text-xs font-black uppercase tracking-widest transition-all text-left",
                           settings.modalLockBackgroundScroll
@@ -1005,6 +1037,67 @@ export default function Settings() {
                     <p className="text-[10px] text-muted-foreground font-medium">
                       Backdrop blur is turned off automatically while &quot;Reduced motion&quot; is on.
                     </p>
+                  </div>
+
+                  <div className="rounded-2xl border border-border bg-muted/40 p-5">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-primary/15 text-primary">
+                        <Shield className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-black text-foreground">Display & safety</h4>
+                        <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                          Stronger chrome, tighter history rows, and optional delete confirmations. Syncs with your
+                          account like other preferences below.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-4 divide-y divide-border/70 rounded-2xl border border-border/70 bg-background/50">
+                      <div className="flex items-center justify-between gap-4 px-4 py-4">
+                        <div className="min-w-0 pr-2">
+                          <p className="text-sm font-bold text-foreground">High-contrast borders</p>
+                          <p className="text-[11px] text-muted-foreground">More visible dividers and UI chrome.</p>
+                        </div>
+                        <ProSwitch
+                          checked={Boolean(settings.highContrastUi)}
+                          onChange={(v) => updateSettings({ highContrastUi: v })}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between gap-4 px-4 py-4">
+                        <div className="min-w-0 pr-2">
+                          <p className="text-sm font-bold text-foreground">Dense history rows</p>
+                          <p className="text-[11px] text-muted-foreground">Less padding on transaction cards.</p>
+                        </div>
+                        <ProSwitch
+                          checked={Boolean(settings.denseLists)}
+                          onChange={(v) => updateSettings({ denseLists: v })}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between gap-4 px-4 py-4">
+                        <div className="min-w-0 pr-2">
+                          <p className="text-sm font-bold text-foreground">Tooltips & hints</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            Reserved for future inline help (stored now).
+                          </p>
+                        </div>
+                        <ProSwitch
+                          checked={settings.showTooltips !== false}
+                          onChange={(v) => updateSettings({ showTooltips: v })}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between gap-4 px-4 py-4">
+                        <div className="min-w-0 pr-2">
+                          <p className="text-sm font-bold text-foreground">Confirm before delete</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            Browser confirm on History delete. Off removes the extra step.
+                          </p>
+                        </div>
+                        <ProSwitch
+                          checked={settings.confirmBeforeDeleteExpense !== false}
+                          onChange={(v) => updateSettings({ confirmBeforeDeleteExpense: v })}
+                        />
+                      </div>
+                    </div>
                   </div>
 
                   <div className="flex flex-wrap justify-end gap-3 pt-1">
@@ -1154,80 +1247,15 @@ export default function Settings() {
           )}
 
           {activeTab === "categories" && (
-            <section className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-              <div className="bg-card border border-border rounded-3xl p-8 shadow-sm">
-                <h3 className="text-xl font-black flex items-center gap-2 mb-6 text-foreground">
-                  <SettingsIcon className="h-6 w-6 text-primary" /> Manage Categories
-                </h3>
-
-                {/* Add New Category */}
-                <div className="bg-accent/20 rounded-2xl p-6 mb-8 border border-border/50">
-                  <p className="text-xs font-black text-muted-foreground uppercase tracking-widest mb-4">
-                    Add New Category
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-                    <input
-                      type="text"
-                      value={newCatName}
-                      onChange={(e) => setNewCatName(e.target.value)}
-                      placeholder="Category Name"
-                      className="sm:col-span-2 bg-background border border-border rounded-xl px-4 py-2 font-bold text-sm"
-                    />
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={newCatIcon}
-                        onChange={(e) => setNewCatIcon(e.target.value)}
-                        className="w-12 bg-background border border-border rounded-xl px-2 py-2 text-center"
-                      />
-                      <input
-                        type="color"
-                        value={newCatColor}
-                        onChange={(e) => setNewCatColor(e.target.value)}
-                        className="flex-1 h-10 p-1 bg-background border border-border rounded-xl cursor-pointer"
-                      />
-                    </div>
-                    <button
-                      onClick={handleAddCategory}
-                      className="bg-primary text-primary-foreground rounded-xl font-black text-xs uppercase tracking-widest hover:scale-105 transition-all flex items-center justify-center gap-2"
-                    >
-                      <Plus className="h-4 w-4" /> Add
-                    </button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {categories.map((c) => (
-                    <div
-                      key={c.id}
-                      className="flex items-center justify-between p-4 bg-accent/30 rounded-2xl border border-border group hover:border-primary/30 transition-all"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl shadow-sm"
-                          style={{ backgroundColor: c.color + "20" }}
-                        >
-                          {c.icon}
-                        </div>
-                        <div>
-                          <p className="font-bold text-sm text-foreground">{c.name}</p>
-                          <p className="text-[10px] text-muted-foreground uppercase font-black tracking-tighter">
-                            {c.isSystem ? "System Category" : "Custom Category"}
-                          </p>
-                        </div>
-                      </div>
-                      {!c.isSystem && (
-                        <button
-                          onClick={() => deleteCategory(c.id)}
-                          className="opacity-0 group-hover:opacity-100 p-2 text-destructive hover:bg-destructive/10 rounded-lg transition-all"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
+            <section className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <CategoryManagerPanel
+                categories={categories}
+                addCategory={addCategory}
+                updateCategory={updateCategory}
+                deleteCategory={deleteCategory}
+                restoreMissingDefaultCategories={restoreMissingDefaultCategories}
+                onToast={(message, variant) => showToast(message, variant)}
+              />
             </section>
           )}
         </div>

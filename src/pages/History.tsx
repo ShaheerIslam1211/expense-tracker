@@ -31,14 +31,15 @@ import { useExpenses } from "../context/ExpenseContext";
 import { useCategories } from "../context/CategoryContext";
 import { useCards } from "../context/CardContext";
 import { useToast } from "../context/ToastContext";
+import { useAppSettings } from "../context/AppSettingsContext";
 import type { Expense, Card } from "../types";
 import { useCurrency } from "../hooks/useCurrency";
+import { normalizeCategoryId } from "../utils/categoryNormalization";
 import { maskAmount, useSensitiveMode } from "../hooks/useSensitiveMode";
 import { cn } from "../utils/cn";
 import { exportToCSV, exportToPDF } from "../utils/export";
 import { useModal } from "../context/ModalContext";
 import { useModalBehavior } from "../hooks/useModalBehavior";
-import { useAppSettings } from "../context/AppSettingsContext";
 import { modalBackdropBlurClass } from "../utils/modalBackdrop";
 import { getExpenseReceiptUrls } from "../utils/expenseReceiptStorage";
 import { useIsMobile } from "../hooks/useIsMobile";
@@ -81,7 +82,7 @@ function ExpenseRow({
   onOpen: () => void;
   formatAmount: (amount: number) => string;
 }) {
-  const cat = categories.find((c) => c.id === expense.categoryId) ?? {
+  const cat = categories.find((c) => c.id === normalizeCategoryId(expense.categoryId)) ?? {
     id: "other",
     icon: "📌",
     color: "#71717a",
@@ -94,6 +95,7 @@ function ExpenseRow({
     <div
       role="button"
       tabIndex={0}
+      data-expense-row="1"
       onClick={onOpen}
       onKeyDown={(e) => {
         if (e.key === "Enter" || e.key === " ") {
@@ -103,8 +105,8 @@ function ExpenseRow({
       }}
       className="group relative bg-card border border-border rounded-2xl p-3 sm:p-4 hover:bg-accent/30 transition-all cursor-pointer overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
     >
-      <div className="flex items-start sm:items-center justify-between gap-2 sm:gap-4">
-        <div className="flex items-start gap-2 sm:gap-4 flex-1 min-w-0">
+      <div className="flex items-start sm:items-center justify-between gap-3 sm:gap-5">
+        <div className="flex min-w-0 flex-1 items-start gap-2 sm:gap-4">
           <div
             className={cn(
               "w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center text-lg sm:text-xl shadow-sm shrink-0",
@@ -157,7 +159,7 @@ function ExpenseRow({
           </div>
         </div>
 
-        <div className="text-right shrink-0 flex flex-col items-end gap-1 sm:gap-2 max-w-[42%] sm:max-w-none">
+        <div className="flex max-w-[42%] shrink-0 flex-col items-end gap-1 text-right sm:max-w-[12rem] md:max-w-[13rem] sm:gap-2">
           <p
             className={cn(
               "text-sm sm:text-lg font-black tracking-tight tabular-nums break-all leading-tight",
@@ -347,7 +349,8 @@ export default function History() {
         (e.customCategory?.toLowerCase().includes(q) ?? false) ||
         (e.merchant?.toLowerCase().includes(q) ?? false) ||
         (e.reference?.toLowerCase().includes(q) ?? false);
-      const matchCat = categoryFilter === "all" || e.categoryId === categoryFilter;
+      const matchCat =
+        categoryFilter === "all" || normalizeCategoryId(e.categoryId) === normalizeCategoryId(categoryFilter);
       const matchType = typeFilter === "all" || e.type === typeFilter;
       const matchPay = paymentFilter === "all" || e.paymentMethodType === paymentFilter;
       const matchReceipt =
@@ -362,7 +365,8 @@ export default function History() {
       return true;
     });
 
-    const catName = (id: string) => categories.find((c) => c.id === id)?.name ?? id;
+    const catName = (id: string) =>
+      categories.find((c) => c.id === normalizeCategoryId(id))?.name ?? id;
 
     list.sort((a, b) => {
       if (sortBy === "oldest") return new Date(a.date).getTime() - new Date(b.date).getTime();
@@ -418,7 +422,8 @@ export default function History() {
     const map = new Map<string, number>();
     for (const e of filteredAndSorted) {
       if (e.type !== "expense") continue;
-      map.set(e.categoryId, (map.get(e.categoryId) ?? 0) + e.amount);
+      const k = normalizeCategoryId(e.categoryId);
+      map.set(k, (map.get(k) ?? 0) + e.amount);
     }
     const rows = [...map.entries()]
       .map(([id, amount]) => ({
@@ -471,14 +476,14 @@ export default function History() {
   };
 
   const handleDelete = async (expense: Expense) => {
-    if (window.confirm(`Delete transaction "${expense.note || "Transaction"}" (${displayAmount(expense.amount)})?`)) {
-      try {
-        await deleteExpense(expense.id);
-        showToast("Transaction deleted", "success");
-      } catch (error) {
-        console.error("Error deleting transaction:", error);
-        showToast("Failed to delete", "error");
-      }
+    const msg = `Delete transaction "${expense.note || "Transaction"}" (${displayAmount(expense.amount)})?`;
+    if (settings.confirmBeforeDeleteExpense !== false && !window.confirm(msg)) return;
+    try {
+      await deleteExpense(expense.id);
+      showToast("Transaction deleted", "success");
+    } catch (error) {
+      console.error("Error deleting transaction:", error);
+      showToast("Failed to delete", "error");
     }
   };
 
@@ -552,7 +557,7 @@ export default function History() {
           </button>
           <button
             type="button"
-            onClick={() => exportToCSV(filteredAndSorted)}
+            onClick={() => exportToCSV(filteredAndSorted, categories)}
             disabled={filteredAndSorted.length === 0}
             className="bg-accent/30 text-foreground p-2.5 md:px-4 md:py-3 rounded-xl font-black text-xs uppercase tracking-widest border border-border hover:bg-accent transition-all flex items-center gap-2 disabled:opacity-50"
             title="Export CSV"
@@ -562,7 +567,7 @@ export default function History() {
           </button>
           <button
             type="button"
-            onClick={() => exportToPDF(filteredAndSorted)}
+            onClick={() => exportToPDF(filteredAndSorted, categories)}
             disabled={filteredAndSorted.length === 0}
             className="bg-accent/30 text-foreground p-2.5 md:px-4 md:py-3 rounded-xl font-black text-xs uppercase tracking-widest border border-border hover:bg-accent transition-all flex items-center gap-2 disabled:opacity-50"
             title="Export PDF"
@@ -905,8 +910,8 @@ export default function History() {
                         <div>
                           <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Category</p>
                           <p className="font-bold text-foreground">
-                            {categories.find((c) => c.id === photoModalExpense.categoryId)?.name ||
-                              photoModalExpense.categoryId}
+                            {categories.find((c) => c.id === normalizeCategoryId(photoModalExpense.categoryId))
+                              ?.name || photoModalExpense.categoryId}
                           </p>
                         </div>
                         <div>

@@ -13,6 +13,7 @@ import {
   format,
 } from "date-fns";
 import type { Expense, CategoryId, MonthlySummary, RecurringInfo } from "../types";
+import { normalizeCategoryId } from "../utils/categoryNormalization";
 import {
   dadBudgetOffsetForMonth,
   dadOutstandingThroughMonthEnd,
@@ -127,6 +128,7 @@ export function ExpenseProvider({ children }: { children: ReactNode }) {
 
           const newExpense: Expense = {
             ...baseExpense,
+            categoryId: normalizeCategoryId(baseExpense.categoryId),
             id: newId,
             date: occurrenceDateStr,
             createdAt: new Date().toISOString(),
@@ -239,6 +241,7 @@ export function ExpenseProvider({ children }: { children: ReactNode }) {
 
       const newExpense: Expense = {
         ...rest,
+        categoryId: normalizeCategoryId(rest.categoryId),
         reference,
         id: expenseId,
         createdAt: new Date().toISOString(),
@@ -302,6 +305,10 @@ export function ExpenseProvider({ children }: { children: ReactNode }) {
         if (k === "photoDataUrl" && typeof v === "string" && !v.startsWith("data:")) {
           continue;
         }
+        if (k === "categoryId" && typeof v === "string") {
+          clean[k] = normalizeCategoryId(v);
+          continue;
+        }
         if (v === undefined) clean[k] = deleteField();
         else clean[k] = stripUndefinedDeep(v);
       }
@@ -361,8 +368,9 @@ export function ExpenseProvider({ children }: { children: ReactNode }) {
           total += amount;
 
           if (e.type === "expense") {
-            byCategory[e.categoryId] = (byCategory[e.categoryId] || 0) + e.amount;
-            if (e.categoryId === "fuel") fuelTotal += e.amount;
+            const catKey = normalizeCategoryId(e.categoryId);
+            byCategory[catKey] = (byCategory[catKey] || 0) + e.amount;
+            if (catKey === "fuel") fuelTotal += e.amount;
             if (e.paymentMethodType === "cash") cashTotal += e.amount;
             else cardTotal += e.amount;
           } else {
@@ -389,8 +397,9 @@ export function ExpenseProvider({ children }: { children: ReactNode }) {
 
   const getCategoryTotal = useCallback(
     (year: number, month: number, categoryId: CategoryId) => {
+      const target = normalizeCategoryId(categoryId);
       return getExpensesByMonth(year, month)
-        .filter((e) => e.categoryId === categoryId && e.type === "expense")
+        .filter((e) => normalizeCategoryId(e.categoryId) === target && e.type === "expense")
         .reduce((s, e) => s + e.amount, 0);
     },
     [getExpensesByMonth],

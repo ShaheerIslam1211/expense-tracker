@@ -20,6 +20,8 @@ import { useCurrency } from "../hooks/useCurrency";
 import type { Expense } from "../types";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useAppSettings } from "../context/AppSettingsContext";
+import { useCategories } from "../context/CategoryContext";
+import { normalizeCategoryId } from "../utils/categoryNormalization";
 
 export default function Calendar() {
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -30,6 +32,7 @@ export default function Calendar() {
   const { formatAmount } = useCurrency();
   const isMobile = useIsMobile();
   const { settings } = useAppSettings();
+  const { categories } = useCategories();
 
   const nextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
   const prevMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
@@ -55,11 +58,15 @@ export default function Calendar() {
   const monthExpenses = expenses.filter((e: Expense) => isSameMonth(new Date(e.date), currentMonth));
   const monthTotal = monthExpenses.reduce((sum: number, e: Expense) => sum + e.amount, 0);
   const categoryTotals = monthExpenses.reduce<Record<string, number>>((acc, e) => {
-    acc[e.categoryId] = (acc[e.categoryId] || 0) + e.amount;
+    const k = normalizeCategoryId(e.categoryId);
+    acc[k] = (acc[k] || 0) + e.amount;
     return acc;
   }, {});
+  const topCategoryKey = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1])[0]?.[0];
   const topCategoryId =
-    Object.entries(categoryTotals).sort((a, b) => b[1] - a[1])[0]?.[0]?.replace(/^\w/, (s) => s.toUpperCase()) || "N/A";
+    (topCategoryKey && categories.find((c) => c.id === topCategoryKey)?.name) ||
+    topCategoryKey?.replace(/^\w/, (s) => s.toUpperCase()) ||
+    "N/A";
 
   return (
     <div className="space-y-5 sm:space-y-6">

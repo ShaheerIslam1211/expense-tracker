@@ -5,7 +5,9 @@ import { XlviLoader } from "react-awesome-loaders";
 import { useExpenses } from "../context/ExpenseContext";
 import { useCategories } from "../context/CategoryContext";
 import { AppLoader } from "../components/AppLoader";
+import { GroceryItemsField } from "../components/GroceryItemsField";
 import { type CategoryId, type FuelInfo, type PaymentMethodType, type ExpenseAdvancedDetails } from "../types";
+import { normalizeCategoryId } from "../utils/categoryNormalization";
 import { useCards } from "../context/CardContext";
 import { useToast } from "../context/ToastContext";
 import { resizeDataUrl } from "../utils/imageResize";
@@ -74,8 +76,8 @@ export default function EditExpense() {
   };
 
   const supportsAdvancedDetails = Boolean(DETAIL_SUBCATEGORY_OPTIONS[categoryId]?.length);
-  const isFoodGrocery = categoryId === "food" && details.subCategory === "groceries";
-  const isCookingOil = isFoodGrocery && details.itemType === "cooking-oil";
+  const isGroceryCategory = normalizeCategoryId(categoryId) === "grocery";
+  const isCookingOil = isGroceryCategory && (details.groceryItems?.includes("cooking-oil") ?? false);
   const isHealthInsulin = categoryId === "health" && (details.subCategory?.startsWith("insulin") ?? false);
   const isHealthLabTest = categoryId === "health" && details.subCategory === "lab-test";
   const isBillsMobilePackage = categoryId === "bills" && details.subCategory === "mobile-package";
@@ -87,7 +89,7 @@ export default function EditExpense() {
   useEffect(() => {
     if (expense) {
       setAmount(String(expense.amount));
-      setCategoryId(expense.categoryId);
+      setCategoryId(normalizeCategoryId(expense.categoryId));
       setCustomCategory(expense.customCategory ?? "");
       setNote(expense.note);
       setDate(format(parseISO(expense.date), "yyyy-MM-dd"));
@@ -113,14 +115,19 @@ export default function EditExpense() {
     const selectedName = categories.find((c) => c.id === categoryId)?.name;
     if (options.length === 0) {
       if (isBikeRepairCategory(categoryId, selectedName)) return;
+      if (normalizeCategoryId(categoryId) === "grocery") {
+        setDetails((prev) => ({ groceryItems: prev.groceryItems ?? [] }));
+        return;
+      }
       setDetails({});
       return;
     }
     setDetails((prev) => {
-      if (!prev.subCategory || !options.some((option) => option.value === prev.subCategory)) {
-        return { ...prev, subCategory: options[0].value };
+      const base = { ...prev, groceryItems: undefined };
+      if (!base.subCategory || !options.some((option) => option.value === base.subCategory)) {
+        return { ...base, subCategory: options[0].value };
       }
-      return prev;
+      return base;
     });
   }, [categoryId, categories]);
 
@@ -178,6 +185,7 @@ export default function EditExpense() {
       ...(details.repairTasks?.length ? { repairTasks: details.repairTasks } : {}),
       ...(details.labTests?.length ? { labTests: details.labTests } : {}),
       ...(details.reports?.length ? { reports: details.reports } : {}),
+      ...(details.groceryItems?.length ? { groceryItems: details.groceryItems } : {}),
     };
     const detailSummary = buildDetailsSummary(normalizedDetails);
 
@@ -201,7 +209,10 @@ export default function EditExpense() {
     } else if (!isFuel) {
       updates.fuel = undefined;
     }
-    if (supportsAdvancedDetails && Object.keys(normalizedDetails).length > 0) {
+    const shouldSaveDetails =
+      (supportsAdvancedDetails && Object.keys(normalizedDetails).length > 0) ||
+      (normalizeCategoryId(categoryId) === "grocery" && (details.groceryItems?.length ?? 0) > 0);
+    if (shouldSaveDetails) {
       updates.details = normalizedDetails;
     } else {
       updates.details = undefined;
@@ -327,6 +338,7 @@ export default function EditExpense() {
                   updateDetails({
                     subCategory: e.target.value,
                     itemType: undefined,
+                    groceryItems: undefined,
                     dosagePlan: undefined,
                     quantity: undefined,
                     unit: undefined,
@@ -647,6 +659,14 @@ export default function EditExpense() {
             </div>
           )}
         </div>
+
+        {isGroceryCategory && (
+          <GroceryItemsField
+            variant="card"
+            selected={details.groceryItems ?? []}
+            onChange={(groceryItems) => updateDetails({ groceryItems })}
+          />
+        )}
 
         {(isFuelCategory || isFuel) && (
           <div className="rounded-xl bg-[var(--surface)] border border-[var(--fuel)]/30 p-4 space-y-3">

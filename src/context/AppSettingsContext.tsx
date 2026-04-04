@@ -20,6 +20,14 @@ export interface AppSettings {
   modalLockBackgroundScroll: boolean;
   /** Frosted backdrop on modal overlays (disabled when reduced motion is on). */
   modalBackdropBlur: boolean;
+  /** Stronger borders / focus for low-vision comfort. */
+  highContrastUi: boolean;
+  /** Tighter list density where supported (e.g. History). */
+  denseLists: boolean;
+  /** Reserved for inline hints on complex controls. */
+  showTooltips: boolean;
+  /** Extra browser confirm before deleting from History (when false, deletes immediately). */
+  confirmBeforeDeleteExpense: boolean;
 }
 
 const DEFAULT_APP_SETTINGS: AppSettings = {
@@ -36,6 +44,10 @@ const DEFAULT_APP_SETTINGS: AppSettings = {
   compactLayout: false,
   modalLockBackgroundScroll: true,
   modalBackdropBlur: true,
+  highContrastUi: false,
+  denseLists: false,
+  showTooltips: true,
+  confirmBeforeDeleteExpense: true,
 };
 
 interface AppSettingsContextValue {
@@ -129,6 +141,18 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
     else root.classList.remove("app-compact");
   }, [settings.compactLayout]);
 
+  useEffect(() => {
+    const root = document.documentElement;
+    if (settings.highContrastUi) root.classList.add("app-high-contrast");
+    else root.classList.remove("app-high-contrast");
+  }, [settings.highContrastUi]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (settings.denseLists) root.classList.add("app-dense-lists");
+    else root.classList.remove("app-dense-lists");
+  }, [settings.denseLists]);
+
   const applyPreset = useCallback((preset: "balanced" | "power" | "minimal") => {
     if (preset === "power") {
       setSettings({
@@ -138,6 +162,7 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
         weekStartsOnMonday: true,
         mobileNavbarFixed: true,
         compactLayout: true,
+        denseLists: true,
         showSidebarTipCard: false,
         modalLockBackgroundScroll: true,
         modalBackdropBlur: true,
@@ -152,6 +177,8 @@ export function AppSettingsProvider({ children }: { children: ReactNode }) {
         showPwaInstallPrompt: false,
         showSidebarTipCard: false,
         compactLayout: true,
+        denseLists: true,
+        highContrastUi: false,
         modalLockBackgroundScroll: true,
         modalBackdropBlur: false,
       });

@@ -27,6 +27,7 @@ import {
 import { useExpenses } from "../context/ExpenseContext";
 import { useBudget } from "../context/BudgetContext";
 import { useCategories } from "../context/CategoryContext";
+import { normalizeCategoryId } from "../utils/categoryNormalization";
 import { useCards } from "../context/CardContext";
 import { useSavings } from "../context/SavingsContext";
 import { useCurrency } from "../hooks/useCurrency";
@@ -141,7 +142,7 @@ export default function Dashboard() {
     .map((c) => ({
       name: c.name,
       value: currentMonthExpenses
-        .filter((e) => e.categoryId === c.id && e.type === "expense")
+        .filter((e) => normalizeCategoryId(e.categoryId) === c.id && e.type === "expense")
         .reduce((s, e) => s + e.amount, 0),
       color: c.color,
     }))
@@ -494,7 +495,7 @@ export default function Dashboard() {
                         expense.type === "income" ? "bg-success/20 text-success" : "bg-accent text-foreground",
                       )}
                     >
-                      {categories.find((c) => c.id === expense.categoryId)?.icon || "💰"}
+                      {categories.find((c) => c.id === normalizeCategoryId(expense.categoryId))?.icon || "💰"}
                     </div>
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
@@ -551,7 +552,10 @@ export default function Dashboard() {
             {savingsGoals.length > 0 ? (
               <div className="space-y-6 w-full">
                 {savingsGoals.slice(0, 3).map((goal: SavingsGoal) => {
-                  const progress = Math.min((goal.currentAmount / goal.targetAmount) * 100, 100);
+                  const progress =
+                    goal.targetAmount > 0
+                      ? Math.min((goal.currentAmount / goal.targetAmount) * 100, 100)
+                      : 0;
                   return (
                     <div
                       key={goal.id}

@@ -6,23 +6,15 @@ export interface Category {
   icon: string;
   color: string;
   isSystem?: boolean;
+  /** Display order (Firestore). Lower first. */
+  sortOrder?: number;
+  /** Include in income transaction picker. */
+  forIncome?: boolean;
+  /** Include in expense transaction picker. */
+  forExpense?: boolean;
 }
 
-export const CATEGORIES: Category[] = [
-  { id: "fuel", name: "Fuel", icon: "⛽", color: "#eab308", isSystem: true },
-  { id: "food", name: "Food & Dining", icon: "🍽️", color: "#22c55e", isSystem: true },
-  { id: "transport", name: "Transport", icon: "🚗", color: "#3b82f6", isSystem: true },
-  { id: "utilities", name: "Utilities", icon: "💡", color: "#f59e0b", isSystem: true },
-  { id: "shopping", name: "Shopping", icon: "🛒", color: "#ec4899", isSystem: true },
-  { id: "health", name: "Health", icon: "❤️", color: "#ef4444", isSystem: true },
-  { id: "entertainment", name: "Entertainment", icon: "🎬", color: "#a855f7", isSystem: true },
-  { id: "bills", name: "Bills", icon: "📄", color: "#06b6d4", isSystem: true },
-  { id: "salary", name: "Salary", icon: "💰", color: "#10b981", isSystem: true },
-  { id: "bonus", name: "Bonus", icon: "🎁", color: "#8b5cf6", isSystem: true },
-  { id: "investment", name: "Investment", icon: "📈", color: "#3b82f6", isSystem: true },
-  { id: "dad", name: "Dad's Expenses", icon: "👨", color: "#0ea5e9", isSystem: true },
-  { id: "other", name: "Other", icon: "📌", color: "#71717a", isSystem: true },
-];
+/** Default categories for new installs live in `src/data/categorySeed.ts` and are written by migration. */
 
 export interface FuelInfo {
   volumeLiters?: number;
@@ -77,6 +69,8 @@ export interface ExpenseAdvancedDetails {
   customRepairTask?: string;
   labTests?: string[];
   customLabTest?: string;
+  /** Category Groceries: preset/custom line items (see `groceryCatalog`). */
+  groceryItems?: string[];
   reports?: Array<{
     name: string;
     mimeType: string;
@@ -117,6 +111,9 @@ export interface Expense {
    * Applied FIFO against oldest dad expenses (through month-end) to lower budget spend.
    */
   dadRecovery?: boolean;
+  /** Expense row created when logging a savings goal deposit (budget impact). */
+  savingsGoalId?: string;
+  savingsDeposit?: boolean;
 }
 
 export interface MonthlySummary {
@@ -147,6 +144,11 @@ export interface UserData {
   hideSensitiveValues?: boolean;
   /** Monthly budget in profile currency; synced across devices when set. */
   monthlyBudget?: number;
+  /**
+   * After first category migration, defaults are not auto-recreated if the user deletes them.
+   * Managed by the app; optional on older profiles until next sync.
+   */
+  categoryCatalogInitialized?: boolean;
   appSettings?: {
     defaultTransactionType?: TransactionType;
     defaultPaymentMethodType?: PaymentMethodType;
@@ -161,6 +163,14 @@ export interface UserData {
     compactLayout?: boolean;
     modalLockBackgroundScroll?: boolean;
     modalBackdropBlur?: boolean;
+    /** Extra UI contrast for borders and focus rings. */
+    highContrastUi?: boolean;
+    /** Tighter rows in transaction lists where supported. */
+    denseLists?: boolean;
+    /** Hint labels on complex controls (where implemented). */
+    showTooltips?: boolean;
+    /** Ask for confirmation before deleting an expense from history. */
+    confirmBeforeDeleteExpense?: boolean;
   };
   createdAt: string;
 }
@@ -176,4 +186,19 @@ export interface SavingsGoal {
   color: string;
   icon: string;
   createdAt: string;
+  /** Planned amount to set aside each month toward this goal (e.g. salary saving). */
+  monthlyContribution?: number;
+  /** Optional gross monthly salary/income for context (e.g. % of income). */
+  monthlyIncome?: number;
+  /** YYYY-MM of the last time a monthly deposit was recorded. */
+  lastContributionMonth?: string;
+  /** Private notes (not shown on dashboard cards). */
+  notes?: string;
+  /**
+   * When true (default), recording a deposit also adds an expense so monthly spend reflects
+   * money set aside from salary. Turn off if you only want the goal balance without budget impact.
+   */
+  logDepositAsExpense?: boolean;
+  /** Last deposits (newest appended); used for history and “this month” summaries. */
+  recentDeposits?: Array<{ at: string; amount: number }>;
 }
