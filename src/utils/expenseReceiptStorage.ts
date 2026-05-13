@@ -110,7 +110,11 @@ export function getExpenseReceiptRemoteUrls(e?: Partial<Expense> | null): string
 }
 
 /** First image URL for list thumbnails / legacy callers. */
-export function getExpenseReceiptSrc(e: { photoUrls?: string[]; photoUrl?: string; photoDataUrl?: string }): string | undefined {
+export function getExpenseReceiptSrc(e: {
+  photoUrls?: string[];
+  photoUrl?: string;
+  photoDataUrl?: string;
+}): string | undefined {
   return getExpenseReceiptUrls(e)[0];
 }
 
@@ -124,7 +128,10 @@ export async function syncExpenseReceiptPhotos(
   desired: string[],
   previousRemoteHttps: string[],
 ): Promise<string[]> {
-  const capped = desired.slice(0, MAX_EXPENSE_RECEIPT_PHOTOS).map((s) => s.trim()).filter(Boolean);
+  const capped = desired
+    .slice(0, MAX_EXPENSE_RECEIPT_PHOTOS)
+    .map((s) => s.trim())
+    .filter(Boolean);
   const final: string[] = [];
   for (const item of capped) {
     if (item.startsWith("data:")) {

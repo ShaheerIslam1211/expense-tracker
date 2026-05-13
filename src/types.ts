@@ -114,6 +114,8 @@ export interface Expense {
   /** Expense row created when logging a savings goal deposit (budget impact). */
   savingsGoalId?: string;
   savingsDeposit?: boolean;
+  /** Matches `SavingsDepositEntry.id` on the goal when this expense was created from a deposit. */
+  savingsDepositId?: string;
 }
 
 export interface MonthlySummary {
@@ -175,6 +177,20 @@ export interface UserData {
   createdAt: string;
 }
 
+/** Where the money for a deposit came from (budget context). */
+export type SavingsDepositSource = "salary" | "bonus" | "windfall" | "other";
+
+export interface SavingsDepositEntry {
+  id: string;
+  /** ISO datetime when the deposit applies (supports past months). */
+  at: string;
+  amount: number;
+  note?: string;
+  source?: SavingsDepositSource;
+  /** Present when this deposit was logged as a budget expense. */
+  expenseId?: string;
+}
+
 export interface SavingsGoal {
   id: string;
   name: string;
@@ -184,6 +200,7 @@ export interface SavingsGoal {
   type: "short-term" | "long-term";
   dueDate?: string;
   color: string;
+  /** Icon key from the savings goal icon set (e.g. piggy-bank). */
   icon: string;
   createdAt: string;
   /** Planned amount to set aside each month toward this goal (e.g. salary saving). */
@@ -200,5 +217,9 @@ export interface SavingsGoal {
    */
   logDepositAsExpense?: boolean;
   /** Last deposits (newest appended); used for history and “this month” summaries. */
-  recentDeposits?: Array<{ at: string; amount: number }>;
+  recentDeposits?: SavingsDepositEntry[];
+  /** Bank / wallet label (e.g. “HBL savings”). */
+  linkedAccount?: string;
+  /** Sort order on the savings page (lower first). */
+  priority?: number;
 }

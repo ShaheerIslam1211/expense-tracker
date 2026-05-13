@@ -114,9 +114,11 @@ export function buildDetailsSummary(details: ExpenseAdvancedDetails) {
   const labTestLabels =
     details.labTests?.map((value) => LAB_TEST_OPTIONS.find((option) => option.value === value)?.label ?? value) ?? [];
   const bikeRepairLabels =
-    details.repairTasks?.map((value) => BIKE_REPAIR_OPTIONS.find((option) => option.value === value)?.label ?? value) ?? [];
-  const grocerySummary =
-    details.groceryItems?.length ? `Grocery: ${formatGroceryItemsSummary(details.groceryItems)}` : "";
+    details.repairTasks?.map((value) => BIKE_REPAIR_OPTIONS.find((option) => option.value === value)?.label ?? value) ??
+    [];
+  const grocerySummary = details.groceryItems?.length
+    ? `Grocery: ${formatGroceryItemsSummary(details.groceryItems)}`
+    : "";
   const parts = [
     details.subCategory,
     details.itemType,

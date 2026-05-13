@@ -278,7 +278,9 @@ export default function Cards() {
               onClick={(e) => e.stopPropagation()}
             >
               <div className="p-5 sm:p-8 border-b border-border bg-accent/10 flex justify-between items-center">
-                <h2 className="text-xl sm:text-2xl font-black text-foreground">{editingCard ? "Edit Card" : "Add New Card"}</h2>
+                <h2 className="text-xl sm:text-2xl font-black text-foreground">
+                  {editingCard ? "Edit Card" : "Add New Card"}
+                </h2>
                 <button
                   type="button"
                   onClick={handleClose}

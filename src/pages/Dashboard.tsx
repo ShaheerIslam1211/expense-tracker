@@ -32,6 +32,7 @@ import { useCards } from "../context/CardContext";
 import { useSavings } from "../context/SavingsContext";
 import { useCurrency } from "../hooks/useCurrency";
 import { cn } from "../utils/cn";
+import { SavingsGoalIcon } from "../components/SavingsGoalIcon";
 import { useIsMobile } from "../hooks/useIsMobile";
 import {
   TrendingUp,
@@ -43,7 +44,7 @@ import {
   ChevronRight,
   Plus,
   Zap,
-  Target,
+  PiggyBank,
   AlertCircle,
   Repeat,
   DollarSign,
@@ -105,8 +106,7 @@ export default function Dashboard() {
   const elapsedDays = isCurrentViewedMonth ? Math.max(1, new Date().getDate()) : monthDays;
   const remainingDays = Math.max(monthDays - elapsedDays, 0);
   const projectedMonthSpend = elapsedDays > 0 ? (budgetSpend / elapsedDays) * monthDays : budgetSpend;
-  const dailyBudgetLeft =
-    monthlyBudget > 0 && remainingDays > 0 ? (monthlyBudget - budgetSpend) / remainingDays : 0;
+  const dailyBudgetLeft = monthlyBudget > 0 && remainingDays > 0 ? (monthlyBudget - budgetSpend) / remainingDays : 0;
   const budgetRunwayStatus = dailyBudgetLeft < 0 ? "Over pace" : dailyBudgetLeft < 100 ? "Tight pace" : "Healthy pace";
   const last14Days = eachDayOfInterval({ start: subDays(new Date(), 13), end: new Date() });
   const dailyExpenseSeries = last14Days.map((d) =>
@@ -118,8 +118,10 @@ export default function Dashboard() {
   const peakDaily14 = Math.max(...dailyExpenseSeries, 0);
   const savingsCompletion =
     savingsGoals.length > 0
-      ? savingsGoals.reduce((sum, goal) => sum + Math.min((goal.currentAmount / Math.max(goal.targetAmount, 1)) * 100, 100), 0) /
-        savingsGoals.length
+      ? savingsGoals.reduce(
+          (sum, goal) => sum + Math.min((goal.currentAmount / Math.max(goal.targetAmount, 1)) * 100, 100),
+          0,
+        ) / savingsGoals.length
       : 0;
   const budgetScore = monthlyBudget > 0 ? Math.max(0, 100 - budgetProgress) : 70;
   const netScore = netBalance >= 0 ? 100 : Math.max(0, 100 - (Math.abs(netBalance) / Math.max(totalInc, 1)) * 100);
@@ -228,7 +230,9 @@ export default function Dashboard() {
             <TrendingUp className="h-24 w-24 text-success" />
           </div>
           <p className="text-sm font-black text-muted-foreground uppercase tracking-widest mb-1">Total Income</p>
-          <p className="text-3xl sm:text-4xl font-black text-foreground">{maskAmount(formatAmount(totalInc), hideSensitiveValues)}</p>
+          <p className="text-3xl sm:text-4xl font-black text-foreground">
+            {maskAmount(formatAmount(totalInc), hideSensitiveValues)}
+          </p>
           <div className="mt-6 flex items-center gap-2 text-xs font-bold text-success bg-success/10 w-fit px-3 py-1 rounded-full border border-success/10">
             <TrendingUp className="h-3 w-3" />
             <span>Positive Cashflow</span>
@@ -309,9 +313,7 @@ export default function Dashboard() {
             {expenseChange.toFixed(1)}%
           </p>
           <p className="text-xs text-muted-foreground mt-2">
-            {expenseChange <= 0
-              ? "You spent less than last month."
-              : "You spent more than last month."}
+            {expenseChange <= 0 ? "You spent less than last month." : "You spent more than last month."}
           </p>
         </div>
 
@@ -553,9 +555,7 @@ export default function Dashboard() {
               <div className="space-y-6 w-full">
                 {savingsGoals.slice(0, 3).map((goal: SavingsGoal) => {
                   const progress =
-                    goal.targetAmount > 0
-                      ? Math.min((goal.currentAmount / goal.targetAmount) * 100, 100)
-                      : 0;
+                    goal.targetAmount > 0 ? Math.min((goal.currentAmount / goal.targetAmount) * 100, 100) : 0;
                   return (
                     <div
                       key={goal.id}
@@ -564,10 +564,13 @@ export default function Dashboard() {
                       <div className="flex justify-between items-end">
                         <div className="flex items-center gap-3">
                           <div
-                            className="w-10 h-10 rounded-xl flex items-center justify-center text-xl shadow-sm"
+                            className="w-10 h-10 rounded-xl flex items-center justify-center shadow-sm"
                             style={{ backgroundColor: goal.color + "20" }}
                           >
-                            {goal.icon || "🎯"}
+                            <SavingsGoalIcon
+                              iconKey={goal.icon}
+                              className="h-5 w-5 text-foreground"
+                            />
                           </div>
                           <div>
                             <p className="font-bold text-sm text-foreground">{goal.name}</p>
@@ -594,10 +597,16 @@ export default function Dashboard() {
             ) : (
               <>
                 <div className="absolute top-0 right-0 p-8 opacity-5">
-                  <Target className="h-48 w-48 text-primary" />
+                  <PiggyBank
+                    className="h-48 w-48 text-primary"
+                    strokeWidth={1}
+                  />
                 </div>
                 <div className="text-center relative z-10">
-                  <Target className="h-12 w-12 text-primary mx-auto mb-4 opacity-40" />
+                  <PiggyBank
+                    className="h-12 w-12 text-primary mx-auto mb-4 opacity-40"
+                    strokeWidth={1.25}
+                  />
                   <h3 className="text-lg font-black text-foreground mb-2">Set Your Financial Goals</h3>
                   <p className="text-sm text-muted-foreground max-w-[280px] mx-auto mb-6">
                     Track your progress towards a new car, a dream vacation, or your emergency fund.
