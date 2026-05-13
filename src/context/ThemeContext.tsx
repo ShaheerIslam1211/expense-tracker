@@ -48,13 +48,16 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const setTheme = useCallback((newTheme: Theme) => {
-    setThemeState(newTheme);
-    applyTheme(newTheme);
-    if (user) {
-      void updateUserProfile({ theme: newTheme });
-    }
-  }, [applyTheme, updateUserProfile, user]);
+  const setTheme = useCallback(
+    (newTheme: Theme) => {
+      setThemeState(newTheme);
+      applyTheme(newTheme);
+      if (user) {
+        void updateUserProfile({ theme: newTheme });
+      }
+    },
+    [applyTheme, updateUserProfile, user],
+  );
 
   // Apply theme on mount and when theme changes
   useEffect(() => {
@@ -91,11 +94,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setTheme,
   };
 
-  return (
-    <ThemeContext.Provider value={value}>
-      {children}
-    </ThemeContext.Provider>
-  );
+  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 
 export function useTheme() {

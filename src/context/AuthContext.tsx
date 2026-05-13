@@ -67,22 +67,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const signUp = useCallback(async ({ name, age, email, password }: { name: string; age: number; email: string; password: string }) => {
-    const cred = await createUserWithEmailAndPassword(auth, email, password);
-    if (name) {
-      await updateProfile(cred.user, { displayName: name });
-    }
-    await setDoc(doc(db, "users", cred.user.uid), {
-      name,
-      age,
-      email,
-      currency: "USD",
-      theme: "system",
-      hideSensitiveValues: true,
-      monthlyBudget: DEFAULT_MONTHLY_BUDGET,
-      createdAt: new Date().toISOString(),
-    });
-  }, []);
+  const signUp = useCallback(
+    async ({ name, age, email, password }: { name: string; age: number; email: string; password: string }) => {
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+      if (name) {
+        await updateProfile(cred.user, { displayName: name });
+      }
+      await setDoc(doc(db, "users", cred.user.uid), {
+        name,
+        age,
+        email,
+        currency: "USD",
+        theme: "system",
+        hideSensitiveValues: true,
+        monthlyBudget: DEFAULT_MONTHLY_BUDGET,
+        createdAt: new Date().toISOString(),
+      });
+    },
+    [],
+  );
 
   const signIn = useCallback(async (email: string, password: string) => {
     await signInWithEmailAndPassword(auth, email, password);
@@ -109,9 +112,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const updateUserProfile = useCallback(
     async (updates: Partial<UserData>) => {
       if (!user) return;
-      const cleanUpdates = Object.fromEntries(
-        Object.entries(updates).filter(([, v]) => v !== undefined),
-      ) as Record<string, unknown>;
+      const cleanUpdates = Object.fromEntries(Object.entries(updates).filter(([, v]) => v !== undefined)) as Record<
+        string,
+        unknown
+      >;
       await setDoc(doc(db, "users", user.uid), cleanUpdates, { merge: true });
 
       if (updates.name) {

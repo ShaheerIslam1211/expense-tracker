@@ -1,15 +1,7 @@
 import { useMemo, useState } from "react";
 import { format, parseISO, subMonths, startOfMonth, endOfMonth, isWithinInterval } from "date-fns";
 import { Link } from "react-router-dom";
-import {
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  CartesianGrid,
-} from "recharts";
+import { XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, CartesianGrid } from "recharts";
 import { Fuel, ChevronLeft, ChevronRight, Plus, Gauge, Droplets, Wallet } from "lucide-react";
 import { useExpenses } from "../context/ExpenseContext";
 import { useCurrency } from "../hooks/useCurrency";
@@ -38,9 +30,7 @@ function aggregateStats(list: Expense[]) {
   const totalVolume = list.reduce((s, e) => s + (e.fuel?.volumeLiters ?? 0), 0);
   const withPrice = list.filter((e) => (e.fuel?.pricePerLiter ?? 0) > 0);
   const avgPrice =
-    withPrice.length > 0
-      ? withPrice.reduce((s, e) => s + (e.fuel?.pricePerLiter ?? 0), 0) / withPrice.length
-      : null;
+    withPrice.length > 0 ? withPrice.reduce((s, e) => s + (e.fuel?.pricePerLiter ?? 0), 0) / withPrice.length : null;
   const byType: Record<string, { count: number; amount: number; liters: number }> = {};
   for (const e of list) {
     const t = e.fuel?.fuelType ?? "other";
@@ -54,9 +44,9 @@ function aggregateStats(list: Expense[]) {
 
 /** km/L using consecutive odometer readings (liters at fill i cover travel since previous fill). */
 function impliedKmPerLiter(sortedAsc: Expense[]): number | null {
-  const withOdo = sortedAsc.filter(
-    (e) => e.fuel?.odometerKm != null && (e.fuel?.volumeLiters ?? 0) > 0,
-  ) as Array<Expense & { fuel: NonNullable<Expense["fuel"]> & { odometerKm: number } }>;
+  const withOdo = sortedAsc.filter((e) => e.fuel?.odometerKm != null && (e.fuel?.volumeLiters ?? 0) > 0) as Array<
+    Expense & { fuel: NonNullable<Expense["fuel"]> & { odometerKm: number } }
+  >;
   if (withOdo.length < 2) return null;
   let totalKm = 0;
   let totalL = 0;
@@ -103,17 +93,13 @@ export default function FuelPage() {
   const stats = useMemo(() => aggregateStats(fuelInRange), [fuelInRange]);
 
   const kmPerLiter = useMemo(() => {
-    const asc = [...fuelInRange].sort(
-      (a, b) => parseISO(a.date).getTime() - parseISO(b.date).getTime(),
-    );
+    const asc = [...fuelInRange].sort((a, b) => parseISO(a.date).getTime() - parseISO(b.date).getTime());
     return impliedKmPerLiter(asc);
   }, [fuelInRange]);
 
   const chartData = useMemo(() => {
     if (mode === "month") {
-      const sorted = [...fuelInRange].sort(
-        (a, b) => parseISO(a.date).getTime() - parseISO(b.date).getTime(),
-      );
+      const sorted = [...fuelInRange].sort((a, b) => parseISO(a.date).getTime() - parseISO(b.date).getTime());
       return sorted.map((e) => ({
         name: format(parseISO(e.date), "d MMM"),
         amount: e.amount,
@@ -173,8 +159,7 @@ export default function FuelPage() {
   const currentCalendarYear = new Date().getFullYear();
   const years = Array.from({ length: 12 }, (_, i) => currentCalendarYear - i);
 
-  const periodBadge =
-    mode === "month" ? "Monthly stats" : mode === "6months" ? "6-month stats" : "Yearly stats";
+  const periodBadge = mode === "month" ? "Monthly stats" : mode === "6months" ? "6-month stats" : "Yearly stats";
 
   const totalSpendCaption =
     mode === "month"
@@ -194,19 +179,16 @@ export default function FuelPage() {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-6 sm:space-y-8">
         <header className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-2 max-w-xl">
-            <p className="text-[10px] sm:text-xs font-black uppercase tracking-[0.2em] text-(--fuel)">
-              Fuel tracker
-            </p>
+            <p className="text-[10px] sm:text-xs font-black uppercase tracking-[0.2em] text-(--fuel)">Fuel tracker</p>
             <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-foreground flex items-center gap-3">
-              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-(--fuel)/15 text-2xl">
-                ⛽
-              </span>
+              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-(--fuel)/15 text-2xl">⛽</span>
               Fuel tracking
             </h1>
             <p className="text-sm sm:text-base text-muted-foreground font-medium leading-relaxed">
               Monitor your vehicle expenses. Pick <strong className="text-foreground">Monthly</strong>,{" "}
-              <strong className="text-foreground">6 months</strong>, or <strong className="text-foreground">Yearly</strong>,
-              then choose the year (and month for monthly view). Everything below updates to match.
+              <strong className="text-foreground">6 months</strong>, or{" "}
+              <strong className="text-foreground">Yearly</strong>, then choose the year (and month for monthly view).
+              Everything below updates to match.
             </p>
           </div>
           <div className="flex flex-col gap-3 w-full lg:w-auto lg:min-w-[17rem]">
@@ -218,7 +200,10 @@ export default function FuelPage() {
                 className="w-full px-3 py-2.5 rounded-xl bg-card border border-border text-sm font-bold text-foreground shadow-sm focus:ring-2 focus:ring-(--fuel)/40 outline-none"
               >
                 {viewPeriodOptions.map((o) => (
-                  <option key={o.value} value={o.value}>
+                  <option
+                    key={o.value}
+                    value={o.value}
+                  >
                     {o.label}
                   </option>
                 ))}
@@ -232,7 +217,10 @@ export default function FuelPage() {
                 className="w-full px-3 py-2.5 rounded-xl bg-card border border-border text-sm font-bold text-foreground shadow-sm focus:ring-2 focus:ring-(--fuel)/40 outline-none"
               >
                 {years.map((y) => (
-                  <option key={y} value={y}>
+                  <option
+                    key={y}
+                    value={y}
+                  >
                     {y}
                   </option>
                 ))}
@@ -249,7 +237,10 @@ export default function FuelPage() {
                   className="w-full px-3 py-2.5 rounded-xl bg-card border border-border text-sm font-bold text-foreground shadow-sm focus:ring-2 focus:ring-(--fuel)/40 outline-none"
                 >
                   {MONTHS.map((m) => (
-                    <option key={m.v} value={m.v}>
+                    <option
+                      key={m.v}
+                      value={m.v}
+                    >
                       {m.label}
                     </option>
                   ))}
@@ -342,7 +333,10 @@ export default function FuelPage() {
                 </div>
                 <p className="mt-1.5 text-lg sm:text-xl font-black tabular-nums text-foreground flex items-center gap-2">
                   {stats.fillCount}
-                  <span className="text-xl" aria-hidden>
+                  <span
+                    className="text-xl"
+                    aria-hidden
+                  >
                     ⛽
                   </span>
                 </p>
@@ -401,9 +395,20 @@ export default function FuelPage() {
                   : "Totals per calendar month in your selected view."}
               </p>
               <div className="h-56 sm:h-72 w-full min-h-[220px]">
-                <ResponsiveContainer width="100%" height="100%" minWidth={280}>
-                  <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" className="stroke-border/60" vertical={false} />
+                <ResponsiveContainer
+                  width="100%"
+                  height="100%"
+                  minWidth={280}
+                >
+                  <BarChart
+                    data={chartData}
+                    margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+                  >
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      className="stroke-border/60"
+                      vertical={false}
+                    />
                     <XAxis
                       dataKey="name"
                       axisLine={false}
@@ -411,7 +416,10 @@ export default function FuelPage() {
                       tick={{ fill: "var(--text-muted)", fontSize: 11 }}
                       interval={mode === "month" && chartData.length > 8 ? "preserveStartEnd" : 0}
                     />
-                    <YAxis hide domain={[0, "auto"]} />
+                    <YAxis
+                      hide
+                      domain={[0, "auto"]}
+                    />
                     <Tooltip
                       cursor={{ fill: "var(--surface-hover)", opacity: 0.35 }}
                       contentStyle={{
@@ -422,7 +430,12 @@ export default function FuelPage() {
                       }}
                       formatter={(value: number | undefined) => (value != null ? formatAmount(value) : "—")}
                     />
-                    <Bar dataKey="amount" fill="var(--fuel)" radius={[6, 6, 0, 0]} maxBarSize={48} />
+                    <Bar
+                      dataKey="amount"
+                      fill="var(--fuel)"
+                      radius={[6, 6, 0, 0]}
+                      maxBarSize={48}
+                    />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -436,7 +449,10 @@ export default function FuelPage() {
                   {chartData
                     .filter((d) => d.amount > 0)
                     .map((d, i) => (
-                      <li key={`${periodLabel}-${i}`} className="flex justify-between items-center text-sm gap-2">
+                      <li
+                        key={`${periodLabel}-${i}`}
+                        className="flex justify-between items-center text-sm gap-2"
+                      >
                         <span className="text-muted-foreground font-medium truncate">
                           {"label" in d ? d.label : "name" in d ? d.name : "—"}
                         </span>
@@ -470,7 +486,9 @@ export default function FuelPage() {
           </div>
           <div className="max-h-[min(28rem,55vh)] sm:max-h-[32rem] overflow-y-auto divide-y divide-border">
             {fuelInRange.length === 0 ? (
-              <div className="p-10 text-center text-sm text-muted-foreground font-medium">Nothing in this period yet.</div>
+              <div className="p-10 text-center text-sm text-muted-foreground font-medium">
+                Nothing in this period yet.
+              </div>
             ) : (
               fuelInRange.map((e) => (
                 <Link

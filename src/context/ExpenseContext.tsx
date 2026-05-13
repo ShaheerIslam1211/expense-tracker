@@ -41,7 +41,10 @@ import { useAuth } from "./AuthContext";
 
 interface ExpenseContextValue {
   expenses: Expense[];
-  addExpense: (expense: Omit<Expense, "id" | "createdAt">) => Promise<void>;
+  addExpense: (
+    expense: Omit<Expense, "id" | "createdAt">,
+    options?: { presetExpenseId?: string },
+  ) => Promise<string | undefined>;
   updateExpense: (id: string, updates: Partial<Expense>) => Promise<void>;
   deleteExpense: (id: string) => Promise<void>;
   getExpensesByMonth: (year: number, month: number) => Expense[];
@@ -212,9 +215,12 @@ export function ExpenseProvider({ children }: { children: ReactNode }) {
   }, [user, processRecurringTransactions]);
 
   const addExpense = useCallback(
-    async (expense: Omit<Expense, "id" | "createdAt">) => {
-      if (!user) return;
-      const expenseId = uuidv4();
+    async (
+      expense: Omit<Expense, "id" | "createdAt">,
+      options?: { presetExpenseId?: string },
+    ): Promise<string | undefined> => {
+      if (!user) return undefined;
+      const expenseId = options?.presetExpenseId ?? uuidv4();
       const {
         pendingReceiptPhotos,
         photoDataUrl: legacyData,
@@ -250,6 +256,7 @@ export function ExpenseProvider({ children }: { children: ReactNode }) {
       const clean = stripUndefinedDeep(newExpense);
       try {
         await setDoc(doc(db, "users", user.uid, "expenses", expenseId), clean);
+        return expenseId;
       } catch (error) {
         console.error("Failed to add expense:", error);
         throw error;

@@ -82,7 +82,8 @@ export default function EditExpense() {
   const isHealthLabTest = categoryId === "health" && details.subCategory === "lab-test";
   const isBillsMobilePackage = categoryId === "bills" && details.subCategory === "mobile-package";
   const isDadInspectorVisit = categoryId === "dad" && details.subCategory === "inspector-visit";
-  const isTransportRideApp = categoryId === "transport" && ["indrive", "yango", "uber-careem"].includes(details.subCategory ?? "");
+  const isTransportRideApp =
+    categoryId === "transport" && ["indrive", "yango", "uber-careem"].includes(details.subCategory ?? "");
   const selectedCategoryName = categories.find((c) => c.id === categoryId)?.name;
   const isSelectedBikeRepairCategory = isBikeRepairCategory(categoryId, selectedCategoryName);
 
@@ -181,7 +182,9 @@ export default function EditExpense() {
     if (Number.isNaN(num) || num <= 0) return;
 
     const normalizedDetails: ExpenseAdvancedDetails = {
-      ...Object.fromEntries(Object.entries(details).filter(([, value]) => typeof value === "string" && value.trim().length > 0)),
+      ...Object.fromEntries(
+        Object.entries(details).filter(([, value]) => typeof value === "string" && value.trim().length > 0),
+      ),
       ...(details.repairTasks?.length ? { repairTasks: details.repairTasks } : {}),
       ...(details.labTests?.length ? { labTests: details.labTests } : {}),
       ...(details.reports?.length ? { reports: details.reports } : {}),
@@ -354,7 +357,10 @@ export default function EditExpense() {
                 className="w-full px-3 py-2 rounded-lg bg-[var(--bg)] border border-[var(--border)]"
               >
                 {(DETAIL_SUBCATEGORY_OPTIONS[categoryId] ?? []).map((option) => (
-                  <option key={option.value} value={option.value}>
+                  <option
+                    key={option.value}
+                    value={option.value}
+                  >
                     {option.label}
                   </option>
                 ))}
@@ -368,7 +374,10 @@ export default function EditExpense() {
                 >
                   <option value="">Select item type</option>
                   {(categoryId === "food" ? FOOD_ITEM_TYPES : []).map((option) => (
-                    <option key={option.value} value={option.value}>
+                    <option
+                      key={option.value}
+                      value={option.value}
+                    >
                       {option.label}
                     </option>
                   ))}
@@ -454,7 +463,10 @@ export default function EditExpense() {
                 </select>
               )}
 
-              {(categoryId === "dad" || categoryId === "bills" || categoryId === "transport" || categoryId === "utilities") && (
+              {(categoryId === "dad" ||
+                categoryId === "bills" ||
+                categoryId === "transport" ||
+                categoryId === "utilities") && (
                 <input
                   type="text"
                   value={details.provider ?? ""}
@@ -530,7 +542,10 @@ export default function EditExpense() {
                 {(details.reports?.length ?? 0) > 0 && (
                   <div className="space-y-1">
                     {details.reports?.map((report, index) => (
-                      <div key={`${report.name}-${index}`} className="flex items-center justify-between text-sm">
+                      <div
+                        key={`${report.name}-${index}`}
+                        className="flex items-center justify-between text-sm"
+                      >
                         <span className="truncate pr-2">
                           {report.mimeType === "application/pdf" ? "PDF" : "Image"} - {report.name}
                         </span>
@@ -784,7 +799,11 @@ export default function EditExpense() {
 
         <div>
           <label className="block text-sm font-medium text-[var(--text-muted)] mb-1">Receipt photos</label>
-          <ReceiptPhotosField photos={receiptPhotos} onChange={setReceiptPhotos} disabled={saving} />
+          <ReceiptPhotosField
+            photos={receiptPhotos}
+            onChange={setReceiptPhotos}
+            disabled={saving}
+          />
         </div>
 
         <div className="flex gap-2">

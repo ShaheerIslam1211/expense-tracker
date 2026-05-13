@@ -123,7 +123,10 @@ export function HistoryFiltersForm({
           >
             <option value="all">All Categories</option>
             {categories.map((c) => (
-              <option key={c.id} value={c.id}>
+              <option
+                key={c.id}
+                value={c.id}
+              >
                 {c.icon} {c.name}
               </option>
             ))}
@@ -150,7 +153,9 @@ export function HistoryFiltersForm({
           onClick={() => setAdvancedOpen((o) => !o)}
           className={cn(
             "inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest border transition-all",
-            advancedOpen ? "bg-primary/15 border-primary text-primary" : "bg-accent/20 border-border text-muted-foreground hover:bg-accent/40",
+            advancedOpen
+              ? "bg-primary/15 border-primary text-primary"
+              : "bg-accent/20 border-border text-muted-foreground hover:bg-accent/40",
           )}
         >
           <SlidersHorizontal className="h-4 w-4" />
@@ -168,7 +173,9 @@ export function HistoryFiltersForm({
           onClick={() => setGroupByDay((g) => !g)}
           className={cn(
             "inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest border transition-all",
-            groupByDay ? "bg-primary/15 border-primary text-primary" : "bg-accent/20 border-border text-muted-foreground hover:bg-accent/40",
+            groupByDay
+              ? "bg-primary/15 border-primary text-primary"
+              : "bg-accent/20 border-border text-muted-foreground hover:bg-accent/40",
           )}
         >
           {groupByDay ? <LayoutList className="h-4 w-4" /> : <List className="h-4 w-4" />}
@@ -207,7 +214,9 @@ export function HistoryFiltersForm({
             </select>
           </div>
           <div>
-            <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest block mb-1">Min amount</label>
+            <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest block mb-1">
+              Min amount
+            </label>
             <input
               type="text"
               inputMode="decimal"
@@ -218,7 +227,9 @@ export function HistoryFiltersForm({
             />
           </div>
           <div>
-            <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest block mb-1">Max amount</label>
+            <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest block mb-1">
+              Max amount
+            </label>
             <input
               type="text"
               inputMode="decimal"
@@ -242,7 +253,9 @@ export function HistoryFiltersForm({
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-1">
-          <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">Start Date</label>
+          <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">
+            Start Date
+          </label>
           <div className="relative">
             <CalendarIcon className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <input
@@ -254,7 +267,9 @@ export function HistoryFiltersForm({
           </div>
         </div>
         <div className="space-y-1">
-          <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">End Date</label>
+          <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest ml-1">
+            End Date
+          </label>
           <div className="relative">
             <CalendarIcon className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <input
@@ -292,7 +307,9 @@ export function HistoryFiltersForm({
           </button>
         ))}
         {datePreset === "custom" && (
-          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-2">Custom range</span>
+          <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-2">
+            Custom range
+          </span>
         )}
       </div>
 
@@ -334,7 +351,10 @@ export function HistoryFiltersForm({
           </p>
           <div className="space-y-2">
             {duplicateCandidates.slice(0, 5).map((group, idx) => (
-              <p key={idx} className="text-xs font-semibold text-foreground">
+              <p
+                key={idx}
+                className="text-xs font-semibold text-foreground"
+              >
                 {group.length}× on {format(parseISO(group[0].date), "dd MMM yyyy")} · {displayAmount(group[0].amount)} ·{" "}
                 {group[0].merchant || group[0].note || "—"}
               </p>
@@ -379,7 +399,10 @@ export function HistoryInsightsColumn({
                   <span className="text-muted-foreground shrink-0 tabular-nums">{displayAmount(row.amount)}</span>
                 </div>
                 <div className="h-2 rounded-full bg-accent/30 overflow-hidden">
-                  <div className="h-full rounded-full transition-all" style={{ width: `${row.pct}%`, backgroundColor: row.color }} />
+                  <div
+                    className="h-full rounded-full transition-all"
+                    style={{ width: `${row.pct}%`, backgroundColor: row.color }}
+                  />
                 </div>
               </li>
             ))}

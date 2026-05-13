@@ -41,11 +41,7 @@ export function GroceryItemsField({ selected, onChange, className, variant = "de
     if (!q) return GROCERY_CATALOG;
     return GROCERY_CATALOG.map((g) => ({
       ...g,
-      items: g.items.filter(
-        (it) =>
-          it.label.toLowerCase().includes(q) ||
-          it.value.toLowerCase().includes(q),
-      ),
+      items: g.items.filter((it) => it.label.toLowerCase().includes(q) || it.value.toLowerCase().includes(q)),
     })).filter((g) => g.items.length > 0);
   }, [query]);
 
@@ -55,16 +51,12 @@ export function GroceryItemsField({ selected, onChange, className, variant = "de
     <div
       className={cn(
         "rounded-xl border p-4 space-y-4",
-        isCard
-          ? "border-border bg-card"
-          : "border-(--border) bg-(--surface) border-emerald-500/25",
+        isCard ? "border-border bg-card" : "bg-(--surface) border-emerald-500/25",
         className,
       )}
     >
       <div>
-        <h3 className={cn("font-bold text-sm", isCard ? "text-foreground" : "text-(--text)")}>
-          🛒 What did you buy?
-        </h3>
+        <h3 className={cn("font-bold text-sm", isCard ? "text-foreground" : "text-(--text)")}>🛒 What did you buy?</h3>
         <p className={cn("text-xs mt-1", isCard ? "text-muted-foreground" : "text-(--text-muted)")}>
           Select everything in this trip — saved on the expense so you can compare next month.
         </p>
@@ -77,7 +69,9 @@ export function GroceryItemsField({ selected, onChange, className, variant = "de
               key={v}
               className={cn(
                 "inline-flex items-center gap-1.5 pl-2.5 pr-1 py-1 rounded-full text-xs font-bold",
-                isCard ? "bg-primary/15 text-primary border border-primary/20" : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30",
+                isCard
+                  ? "bg-primary/15 text-primary border border-primary/20"
+                  : "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30",
               )}
             >
               {getGroceryItemLabel(v)}
@@ -117,7 +111,11 @@ export function GroceryItemsField({ selected, onChange, className, variant = "de
 
       <div className="max-h-[min(50vh,320px)] overflow-y-auto space-y-2 pr-1 border border-dashed rounded-xl p-2 border-border/60">
         {filteredCatalog.map((group) => (
-          <details key={group.id} className="group rounded-lg border border-border/50 bg-background/50" open={!!query.trim()}>
+          <details
+            key={group.id}
+            className="group rounded-lg border border-border/50 bg-background/50"
+            open={!!query.trim()}
+          >
             <summary className="cursor-pointer px-3 py-2 text-xs font-black uppercase tracking-wider text-muted-foreground list-none flex items-center justify-between">
               {group.label}
               <span className="text-[10px] opacity-60 group-open:rotate-0">▼</span>
@@ -173,9 +171,7 @@ export function GroceryItemsField({ selected, onChange, className, variant = "de
           onClick={addCustom}
           className={cn(
             "inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-black text-xs uppercase tracking-wide shrink-0",
-            isCard
-              ? "bg-primary text-primary-foreground"
-              : "bg-emerald-600 text-white hover:bg-emerald-700",
+            isCard ? "bg-primary text-primary-foreground" : "bg-emerald-600 text-white hover:bg-emerald-700",
           )}
         >
           <Plus className="h-4 w-4" />

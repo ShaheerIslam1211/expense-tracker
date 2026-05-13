@@ -148,7 +148,8 @@ export default function AddExpense() {
   const isHealthLabTest = categoryId === "health" && details.subCategory === "lab-test";
   const isBillsMobilePackage = categoryId === "bills" && details.subCategory === "mobile-package";
   const isDadInspectorVisit = categoryId === "dad" && details.subCategory === "inspector-visit";
-  const isTransportRideApp = categoryId === "transport" && ["indrive", "yango", "uber-careem"].includes(details.subCategory ?? "");
+  const isTransportRideApp =
+    categoryId === "transport" && ["indrive", "yango", "uber-careem"].includes(details.subCategory ?? "");
   const selectedCategoryName = categories.find((c) => c.id === categoryId)?.name;
   const isSelectedBikeRepairCategory = isBikeRepairCategory(categoryId, selectedCategoryName);
 
@@ -338,7 +339,9 @@ export default function AddExpense() {
 
     const pendingPhotos = getPendingReceiptPhotos();
     const normalizedDetails: ExpenseAdvancedDetails = {
-      ...Object.fromEntries(Object.entries(details).filter(([, value]) => typeof value === "string" && value.trim().length > 0)),
+      ...Object.fromEntries(
+        Object.entries(details).filter(([, value]) => typeof value === "string" && value.trim().length > 0),
+      ),
       ...(details.repairTasks?.length ? { repairTasks: details.repairTasks } : {}),
       ...(details.labTests?.length ? { labTests: details.labTests } : {}),
       ...(details.reports?.length ? { reports: details.reports } : {}),
@@ -661,7 +664,10 @@ export default function AddExpense() {
                 className="w-full px-3 py-2 rounded-lg bg-(--bg) border border-(--border)"
               >
                 {(DETAIL_SUBCATEGORY_OPTIONS[categoryId] ?? []).map((option) => (
-                  <option key={option.value} value={option.value}>
+                  <option
+                    key={option.value}
+                    value={option.value}
+                  >
                     {option.label}
                   </option>
                 ))}
@@ -675,7 +681,10 @@ export default function AddExpense() {
                 >
                   <option value="">Select item type</option>
                   {(categoryId === "food" ? FOOD_ITEM_TYPES : []).map((option) => (
-                    <option key={option.value} value={option.value}>
+                    <option
+                      key={option.value}
+                      value={option.value}
+                    >
                       {option.label}
                     </option>
                   ))}
@@ -761,7 +770,10 @@ export default function AddExpense() {
                 </select>
               )}
 
-              {(categoryId === "dad" || categoryId === "bills" || categoryId === "transport" || categoryId === "utilities") && (
+              {(categoryId === "dad" ||
+                categoryId === "bills" ||
+                categoryId === "transport" ||
+                categoryId === "utilities") && (
                 <input
                   type="text"
                   value={details.provider ?? ""}
@@ -797,9 +809,7 @@ export default function AddExpense() {
                         type="button"
                         onClick={() => toggleLabTest(test.value)}
                         className={`px-3 py-2 rounded-lg border text-left text-sm ${
-                          active
-                            ? "border-(--accent) bg-(--accent)/10 text-(--accent)"
-                            : "border-(--border) bg-(--bg)"
+                          active ? "border-(--accent) bg-(--accent)/10 text-(--accent)" : "border-(--border) bg-(--bg)"
                         }`}
                       >
                         {test.label}
@@ -837,7 +847,10 @@ export default function AddExpense() {
                 {(details.reports?.length ?? 0) > 0 && (
                   <div className="space-y-1">
                     {details.reports?.map((report, index) => (
-                      <div key={`${report.name}-${index}`} className="flex items-center justify-between text-sm">
+                      <div
+                        key={`${report.name}-${index}`}
+                        className="flex items-center justify-between text-sm"
+                      >
                         <span className="truncate pr-2">
                           {report.mimeType === "application/pdf" ? "PDF" : "Image"} - {report.name}
                         </span>
@@ -874,9 +887,7 @@ export default function AddExpense() {
                     type="button"
                     onClick={() => toggleBikeRepairTask(task.value)}
                     className={`px-3 py-2 rounded-lg border text-left text-sm touch-manipulation ${
-                      active
-                        ? "border-(--accent) bg-(--accent)/10 text-(--accent)"
-                        : "border-(--border) bg-(--bg)"
+                      active ? "border-(--accent) bg-(--accent)/10 text-(--accent)" : "border-(--border) bg-(--bg)"
                     }`}
                   >
                     {task.label}

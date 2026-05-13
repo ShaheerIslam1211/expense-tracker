@@ -10,7 +10,6 @@ interface ModalContextValue {
 
 const ModalContext = createContext<ModalContextValue | null>(null);
 
- 
 export const useModal = () => {
   const context = useContext(ModalContext);
   if (!context) {

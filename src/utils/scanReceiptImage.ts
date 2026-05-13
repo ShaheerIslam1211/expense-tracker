@@ -54,10 +54,7 @@ function dataURLToBlob(dataURL: string): Blob {
 }
 
 /** Run OCR on image using PaddleOCR backend API */
-export async function scanReceiptImage(
-  imageDataUrl: string,
-  onProgress?: (p: number) => void,
-): Promise<ParsedReceipt> {
+export async function scanReceiptImage(imageDataUrl: string, onProgress?: (p: number) => void): Promise<ParsedReceipt> {
   try {
     assertProductionOcrUrl(OCR_API_URL);
     onProgress?.(0.1);

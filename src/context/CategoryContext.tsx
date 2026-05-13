@@ -1,25 +1,17 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
-import {
-  collection,
-  deleteDoc,
-  doc,
-  onSnapshot,
-  setDoc,
-  updateDoc,
-} from "firebase/firestore";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { collection, deleteDoc, doc, onSnapshot, setDoc, updateDoc } from "firebase/firestore";
 import type { Category } from "../types";
 import { db } from "../firebase";
 import { useAuth } from "./AuthContext";
-import { isLegacyShadowCategoryId, normalizeCategoryId, RESERVED_CATEGORY_DOC_IDS } from "../utils/categoryNormalization";
-import { restoreMissingDefaultCategories as restoreMissingDefaultCategoriesApi, syncCategoryDefaults } from "../utils/syncCategoryDefaults";
+import {
+  isLegacyShadowCategoryId,
+  normalizeCategoryId,
+  RESERVED_CATEGORY_DOC_IDS,
+} from "../utils/categoryNormalization";
+import {
+  restoreMissingDefaultCategories as restoreMissingDefaultCategoriesApi,
+  syncCategoryDefaults,
+} from "../utils/syncCategoryDefaults";
 
 export type CategoryUpdatePayload = Partial<
   Pick<Category, "name" | "icon" | "color" | "forIncome" | "forExpense" | "sortOrder">
@@ -76,10 +68,7 @@ export function CategoryProvider({ children }: { children: ReactNode }) {
         const next: Category[] = snap.docs
           .map((d) => mapCategoryDoc(d.id, d.data() as Record<string, unknown>))
           .filter((c) => !isLegacyShadowCategoryId(c.id));
-        next.sort(
-          (a, b) =>
-            (a.sortOrder ?? 10_000) - (b.sortOrder ?? 10_000) || a.name.localeCompare(b.name),
-        );
+        next.sort((a, b) => (a.sortOrder ?? 10_000) - (b.sortOrder ?? 10_000) || a.name.localeCompare(b.name));
         setCategories(next);
       });
     })();

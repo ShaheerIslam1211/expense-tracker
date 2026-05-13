@@ -18,7 +18,7 @@ import {
   Monitor,
   Trash2,
   Plus,
-  Target,
+  PiggyBank,
   SlidersHorizontal,
   RotateCcw,
   WandSparkles,
@@ -40,6 +40,8 @@ import Cropper, { type Area, type Point } from "react-easy-crop";
 import { useModalBehavior } from "../hooks/useModalBehavior";
 import { normalizeCategoryId } from "../utils/categoryNormalization";
 import { CategoryManagerPanel } from "../components/settings/CategoryManagerPanel";
+import { DEFAULT_SAVINGS_GOAL_ICON } from "../constants/savingsGoalIconsMeta";
+import { SavingsGoalIcon } from "../components/SavingsGoalIcon";
 
 function ProSwitch({
   checked,
@@ -153,7 +155,6 @@ export default function Settings() {
   // New Savings Goal state
   const [newGoalName, setNewGoalName] = useState("");
   const [newGoalTarget, setNewGoalTarget] = useState("");
-  const [newGoalIcon, setNewGoalIcon] = useState("🎯");
   const [newGoalColor, setNewGoalColor] = useState("#6366f1");
   const [advancedSaved, setAdvancedSaved] = useState(false);
   const settingsImportRef = useRef<HTMLInputElement>(null);
@@ -277,7 +278,7 @@ export default function Settings() {
       name: newGoalName.trim(),
       targetAmount: parseFloat(newGoalTarget),
       type: "short-term",
-      icon: newGoalIcon,
+      icon: DEFAULT_SAVINGS_GOAL_ICON,
       color: newGoalColor,
       createdAt: new Date().toISOString(),
     });
@@ -1148,7 +1149,7 @@ export default function Settings() {
 
                 <div className="pt-8 border-t border-border space-y-6">
                   <h3 className="text-xl font-black flex items-center gap-2 text-foreground">
-                    <Target className="h-6 w-6 text-primary" /> Savings Goals
+                    <PiggyBank className="h-6 w-6 text-primary" /> Savings Goals
                   </h3>
 
                   {/* Add New Goal */}
@@ -1168,7 +1169,7 @@ export default function Settings() {
                         type="number"
                         value={newGoalTarget}
                         onChange={(e) => setNewGoalTarget(e.target.value)}
-                        placeholder="Target Amount"
+                        placeholder="Goal cap amount"
                         className="bg-background border border-border rounded-xl px-4 py-2 font-bold text-sm"
                       />
                       <button
@@ -1178,25 +1179,20 @@ export default function Settings() {
                         <Plus className="h-4 w-4" /> Create
                       </button>
                     </div>
-                    <div className="grid grid-cols-2 gap-4 mt-4">
-                      <div className="flex items-center gap-3">
-                        <label className="text-[10px] font-black text-muted-foreground uppercase">Icon</label>
-                        <input
-                          type="text"
-                          value={newGoalIcon}
-                          onChange={(e) => setNewGoalIcon(e.target.value)}
-                          className="w-10 bg-background border border-border rounded-lg px-2 py-1 text-center"
-                        />
-                      </div>
+                    <div className="flex flex-wrap items-center gap-4 mt-4">
                       <div className="flex items-center gap-3">
                         <label className="text-[10px] font-black text-muted-foreground uppercase">Color</label>
                         <input
                           type="color"
                           value={newGoalColor}
                           onChange={(e) => setNewGoalColor(e.target.value)}
-                          className="flex-1 h-8 p-1 bg-background border border-border rounded-lg cursor-pointer"
+                          className="h-8 w-14 p-1 bg-background border border-border rounded-lg cursor-pointer"
                         />
                       </div>
+                      <p className="text-[11px] text-muted-foreground font-medium">
+                        Icon defaults to piggy bank — open <strong className="text-foreground">Savings</strong> to pick
+                        icons, income, and deposits.
+                      </p>
                     </div>
                   </div>
 
@@ -1209,10 +1205,13 @@ export default function Settings() {
                       >
                         <div className="flex items-center gap-4 flex-1">
                           <div
-                            className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl shadow-sm"
+                            className="w-12 h-12 rounded-xl flex items-center justify-center shadow-sm"
                             style={{ backgroundColor: goal.color + "20" }}
                           >
-                            {goal.icon}
+                            <SavingsGoalIcon
+                              iconKey={goal.icon}
+                              className="h-6 w-6 text-foreground"
+                            />
                           </div>
                           <div className="flex-1">
                             <div className="flex justify-between mb-1">

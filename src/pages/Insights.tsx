@@ -123,10 +123,14 @@ export default function Insights() {
   const recommendations: string[] = [];
   if (savingsRate < 10) recommendations.push("Savings rate is low. Try reducing variable categories by 10-15%.");
   if (topCategoryShare > 45 && topCategory) {
-    recommendations.push(`${topCategory.name} is ${topCategoryShare.toFixed(0)}% of spend. Consider setting a category cap.`);
+    recommendations.push(
+      `${topCategory.name} is ${topCategoryShare.toFixed(0)}% of spend. Consider setting a category cap.`,
+    );
   }
-  if (anomalies.length > 0) recommendations.push("Review high-value anomaly transactions for one-off or duplicate charges.");
-  if (recommendations.length === 0) recommendations.push("Great balance across categories. Keep your current spending strategy.");
+  if (anomalies.length > 0)
+    recommendations.push("Review high-value anomaly transactions for one-off or duplicate charges.");
+  if (recommendations.length === 0)
+    recommendations.push("Great balance across categories. Keep your current spending strategy.");
 
   return (
     <div className="space-y-8 md:space-y-10 animate-in p-2 sm:p-4 md:p-0">
@@ -186,7 +190,9 @@ export default function Insights() {
               <p className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.2em] mb-1">
                 Avg Monthly
               </p>
-              <p className="text-lg sm:text-xl font-black text-foreground">{formatAmount(yearTotal / (summaries.length || 1))}</p>
+              <p className="text-lg sm:text-xl font-black text-foreground">
+                {formatAmount(yearTotal / (summaries.length || 1))}
+              </p>
             </div>
           </div>
 
@@ -306,9 +312,7 @@ export default function Insights() {
           <p className="text-lg font-black text-foreground mt-2">
             {topSpendDay ? format(new Date(topSpendDay[0]), "dd MMM yyyy") : "N/A"}
           </p>
-          <p className="text-xs text-muted-foreground mt-1">
-            {topSpendDay ? formatAmount(topSpendDay[1]) : "No data"}
-          </p>
+          <p className="text-xs text-muted-foreground mt-1">{topSpendDay ? formatAmount(topSpendDay[1]) : "No data"}</p>
         </div>
         <div className="rounded-2xl bg-card border border-border p-4 shadow-sm">
           <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Concentration Risk</p>

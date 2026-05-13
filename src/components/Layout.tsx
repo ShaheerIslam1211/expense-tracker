@@ -13,7 +13,7 @@ import {
   Moon,
   Monitor,
   Plus,
-  Target,
+  PiggyBank,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "../utils/cn";
@@ -31,7 +31,7 @@ const nav = [
   { to: "/cards", label: "Cards", icon: CreditCard },
   { to: "/fuel", label: "Fuel Tracker", icon: Fuel },
   { to: "/insights", label: "Insights", icon: TrendingUp },
-  { to: "/savings", label: "Savings", icon: Target },
+  { to: "/savings", label: "Savings", icon: PiggyBank },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 
@@ -196,7 +196,7 @@ export default function Layout() {
         <div className="flex-1 md:overflow-y-auto pb-[calc(7.5rem+env(safe-area-inset-bottom))] md:pb-8">
           <div
             className={cn(
-              "w-full max-w-7xl 2xl:max-w-[90rem] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10",
+              "w-full max-w-7xl 2xl:max-w-360 mx-auto px-4 sm:px-6 lg:px-8 xl:px-10",
               settings.compactLayout ? "py-5" : "py-8",
             )}
           >
@@ -218,41 +218,6 @@ export default function Layout() {
 
       {settings.showPwaInstallPrompt && <PwaInstallPrompt />}
       <CommandCenter />
-
-      {/* Mobile Bottom Navigation */}
-      {/* <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-card/80 backdrop-blur-lg border-t border-border flex justify-around items-center py-2 z-50">
-        {nav.slice(0, 3).map(({ to, icon: Icon }) => (
-          <NavLink
-            key={to}
-            to={to}
-            className={({ isActive }) =>
-              cn(
-                "p-3 rounded-xl transition-all duration-200",
-                isActive ? "text-primary bg-primary/10" : "text-muted-foreground",
-              )
-            }
-          >
-            <Icon className="h-6 w-6" />
-          </NavLink>
-        ))}
-        <NavLink
-          to="/cards"
-          className={({ isActive }) =>
-            cn(
-              "p-3 rounded-xl transition-all duration-200",
-              isActive ? "text-primary bg-primary/10" : "text-muted-foreground",
-            )
-          }
-        >
-          <CreditCard className="h-6 w-6" />
-        </NavLink>
-        <button
-          onClick={() => setIsSidebarOpen(true)}
-          className="p-3 text-muted-foreground"
-        >
-          <Menu className="h-6 w-6" />
-        </button>
-      </nav> */}
     </div>
   );
 }
