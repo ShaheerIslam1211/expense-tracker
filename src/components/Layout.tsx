@@ -14,6 +14,7 @@ import {
   Monitor,
   Plus,
   PiggyBank,
+  Repeat,
 } from "lucide-react";
 import { useState } from "react";
 import { cn } from "../utils/cn";
@@ -32,6 +33,7 @@ const nav = [
   { to: "/fuel", label: "Fuel Tracker", icon: Fuel },
   { to: "/insights", label: "Insights", icon: TrendingUp },
   { to: "/savings", label: "Savings", icon: PiggyBank },
+  { to: "/recurring", label: "Recurring", icon: Repeat },
   { to: "/settings", label: "Settings", icon: Settings },
 ];
 

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { format, parseISO } from "date-fns";
-import { XlviLoader } from "react-awesome-loaders";
+import { XlviLoader } from "../components/XlviLoader";
 import { useExpenses } from "../context/ExpenseContext";
 import { useCategories } from "../context/CategoryContext";
 import { AppLoader } from "../components/AppLoader";

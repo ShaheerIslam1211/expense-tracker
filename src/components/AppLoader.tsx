@@ -1,4 +1,4 @@
-import { XlviLoader } from 'react-awesome-loaders'
+import { XlviLoader } from './XlviLoader'
 
 export function AppLoader({ className = '' }: { className?: string }) {
   return (

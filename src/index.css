@@ -214,3 +214,48 @@ textarea {
     font-size: 16px;
   }
 }
+
+.xlvi-loader {
+  height: var(--xlvi-desktop, 48px);
+}
+
+@media (max-width: 640px) {
+  .xlvi-loader {
+    height: var(--xlvi-mobile, 40px);
+  }
+}
+
+.xlvi-loader__box {
+  width: calc(0.28 * var(--xlvi-desktop, 48px));
+  height: calc(0.28 * var(--xlvi-desktop, 48px));
+  animation: xlvi-bounce 0.85s ease-in-out infinite;
+}
+
+@media (max-width: 640px) {
+  .xlvi-loader__box {
+    width: calc(0.28 * var(--xlvi-mobile, 40px));
+    height: calc(0.28 * var(--xlvi-mobile, 40px));
+  }
+}
+
+@keyframes xlvi-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(calc(-0.35 * var(--xlvi-desktop, 48px)));
+  }
+}
+
+@media (max-width: 640px) {
+  @keyframes xlvi-bounce {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(calc(-0.35 * var(--xlvi-mobile, 40px)));
+    }
+  }
+}

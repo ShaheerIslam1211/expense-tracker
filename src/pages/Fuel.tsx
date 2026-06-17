@@ -7,6 +7,7 @@ import { useExpenses } from "../context/ExpenseContext";
 import { useCurrency } from "../hooks/useCurrency";
 import type { Expense } from "../types";
 import { cn } from "../utils/cn";
+import { impliedKmPerLiter, perFillEfficiency } from "../utils/fuelStats";
 
 type FuelRangeMode = "month" | "6months" | "year";
 
@@ -42,27 +43,6 @@ function aggregateStats(list: Expense[]) {
   return { total, totalVolume, avgPrice, byType, fillCount: list.length };
 }
 
-/** km/L using consecutive odometer readings (liters at fill i cover travel since previous fill). */
-function impliedKmPerLiter(sortedAsc: Expense[]): number | null {
-  const withOdo = sortedAsc.filter((e) => e.fuel?.odometerKm != null && (e.fuel?.volumeLiters ?? 0) > 0) as Array<
-    Expense & { fuel: NonNullable<Expense["fuel"]> & { odometerKm: number } }
-  >;
-  if (withOdo.length < 2) return null;
-  let totalKm = 0;
-  let totalL = 0;
-  for (let i = 1; i < withOdo.length; i++) {
-    const prev = withOdo[i - 1].fuel.odometerKm;
-    const cur = withOdo[i].fuel.odometerKm;
-    const kmDelta = cur - prev;
-    const L = withOdo[i].fuel.volumeLiters ?? 0;
-    if (kmDelta > 0 && kmDelta < 20000 && L > 0) {
-      totalKm += kmDelta;
-      totalL += L;
-    }
-  }
-  return totalL > 0 ? totalKm / totalL : null;
-}
-
 export default function FuelPage() {
   const now = new Date();
   const [mode, setMode] = useState<FuelRangeMode>("month");
@@ -96,6 +76,11 @@ export default function FuelPage() {
     const asc = [...fuelInRange].sort((a, b) => parseISO(a.date).getTime() - parseISO(b.date).getTime());
     return impliedKmPerLiter(asc);
   }, [fuelInRange]);
+
+  const fillEfficiencyById = useMemo(() => {
+    const asc = [...getFuelExpenses()].sort((a, b) => parseISO(a.date).getTime() - parseISO(b.date).getTime());
+    return perFillEfficiency(asc);
+  }, [getFuelExpenses]);
 
   const chartData = useMemo(() => {
     if (mode === "month") {
@@ -191,7 +176,7 @@ export default function FuelPage() {
               Everything below updates to match.
             </p>
           </div>
-          <div className="flex flex-col gap-3 w-full lg:w-auto lg:min-w-[17rem]">
+          <div className="flex flex-col gap-3 w-full lg:w-auto lg:min-w-68">
             <div className="flex flex-col gap-2">
               <label className="text-[10px] font-black uppercase tracking-wider text-muted-foreground">View</label>
               <select
@@ -352,7 +337,8 @@ export default function FuelPage() {
               {kmPerLiter != null ? `${kmPerLiter.toFixed(2)}` : "—"}
             </p>
             <p className="text-[10px] text-muted-foreground mt-2 leading-relaxed">
-              From odometer readings between fill-ups in this period.
+              Average km per liter from odometer readings between fill-ups. Log odometer + liters on each refill
+              (reserve to reserve) to see your mileage.
             </p>
           </div>
         </section>
@@ -484,42 +470,52 @@ export default function FuelPage() {
               {fuelInRange.length} in period
             </span>
           </div>
-          <div className="max-h-[min(28rem,55vh)] sm:max-h-[32rem] overflow-y-auto divide-y divide-border">
+          <div className="max-h-[min(28rem,55vh)] sm:max-h-128 overflow-y-auto divide-y divide-border">
             {fuelInRange.length === 0 ? (
               <div className="p-10 text-center text-sm text-muted-foreground font-medium">
                 Nothing in this period yet.
               </div>
             ) : (
-              fuelInRange.map((e) => (
-                <Link
-                  key={e.id}
-                  to={`/edit/${e.id}`}
-                  className="flex items-center gap-3 sm:gap-4 p-4 sm:px-6 hover:bg-accent/40 transition"
-                >
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-(--fuel)/15 text-lg">
-                    ⛽
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-bold text-sm text-foreground truncate">
-                      {format(parseISO(e.date), "EEE, d MMM yyyy")}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      {e.fuel?.volumeLiters
-                        ? `${e.fuel.volumeLiters} L @ ${formatAmount(e.fuel.pricePerLiter ?? 0)}/L`
-                        : e.note || "Fuel"}
-                      {e.fuel?.fuelType ? ` · ${e.fuel.fuelType}` : ""}
-                    </p>
-                  </div>
-                  <div className="text-right shrink-0">
-                    <p className="font-black text-sm tabular-nums text-(--fuel)">{formatAmount(e.amount)}</p>
-                    {e.fuel?.odometerKm != null ? (
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
-                        {e.fuel.odometerKm} km
+              fuelInRange.map((e) => {
+                const eff = fillEfficiencyById.get(e.id);
+                return (
+                  <Link
+                    key={e.id}
+                    to={`/edit/${e.id}`}
+                    className="flex items-center gap-3 sm:gap-4 p-4 sm:px-6 hover:bg-accent/40 transition"
+                  >
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-(--fuel)/15 text-lg">
+                      ⛽
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-bold text-sm text-foreground truncate">
+                        {format(parseISO(e.date), "EEE, d MMM yyyy")}
                       </p>
-                    ) : null}
-                  </div>
-                </Link>
-              ))
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {e.fuel?.volumeLiters
+                          ? `${e.fuel.volumeLiters} L @ ${formatAmount(e.fuel.pricePerLiter ?? 0)}/L`
+                          : e.note || "Fuel"}
+                        {e.fuel?.fuelType ? ` · ${e.fuel.fuelType}` : ""}
+                      </p>
+                      {eff ? (
+                        <p className="text-[10px] font-bold text-primary mt-1 tabular-nums">
+                          {eff.kmSinceLastFill} km since last fill · {eff.kmPerLiter.toFixed(2)} km/L
+                        </p>
+                      ) : e.fuel?.odometerKm != null && !(e.fuel?.volumeLiters ?? 0) ? (
+                        <p className="text-[10px] text-muted-foreground mt-1">Add liters to calculate km/L</p>
+                      ) : null}
+                    </div>
+                    <div className="text-right shrink-0">
+                      <p className="font-black text-sm tabular-nums text-(--fuel)">{formatAmount(e.amount)}</p>
+                      {e.fuel?.odometerKm != null ? (
+                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide">
+                          {e.fuel.odometerKm} km
+                        </p>
+                      ) : null}
+                    </div>
+                  </Link>
+                );
+              })
             )}
           </div>
         </section>

@@ -1,7 +1,7 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { format } from "date-fns";
-import { XlviLoader } from "react-awesome-loaders";
+import { XlviLoader } from "../components/XlviLoader";
 import { useExpenses } from "../context/ExpenseContext";
 import { useCategories } from "../context/CategoryContext";
 import { useCards } from "../context/CardContext";
@@ -23,6 +23,11 @@ import {
   isBikeRepairCategory,
 } from "../utils/expenseDetails";
 import { ReceiptPhotosField } from "../components/ReceiptPhotosField";
+import {
+  computeKmPerLiter,
+  computeKmSinceLastFill,
+  getPreviousFuelFillWithOdometer,
+} from "../utils/fuelStats";
 
 export default function AddExpense() {
   const navigate = useNavigate();
@@ -391,6 +396,25 @@ export default function AddExpense() {
   const isFuelCategory = categoryId === "fuel";
   const hasScannedItems = scannedItems.length > 0;
   const hasScannedData = hasScannedItems || parsedMerchant || parsedTotal;
+
+  const fuelAveragePreview = useMemo(() => {
+    if (!isFuelCategory && !isFuel) return null;
+    const liters = fuel.volumeLiters ?? 0;
+    const odometer = fuel.odometerKm;
+    if (!odometer || liters <= 0) return null;
+    const prev = getPreviousFuelFillWithOdometer(expenses, { beforeDate: new Date(date).toISOString() });
+    if (!prev?.fuel?.odometerKm) return null;
+    const kmSinceLast = computeKmSinceLastFill(prev.fuel.odometerKm, odometer);
+    if (kmSinceLast == null) return null;
+    const kmPerLiter = computeKmPerLiter(kmSinceLast, liters);
+    if (kmPerLiter == null) return null;
+    return {
+      kmSinceLast,
+      kmPerLiter,
+      prevOdometer: prev.fuel.odometerKm,
+      prevDate: prev.date,
+    };
+  }, [isFuelCategory, isFuel, fuel.volumeLiters, fuel.odometerKm, expenses, date]);
   const isHealthReceipt = parsedReceiptType === "health" || categoryId === "health";
   const isGroceryReceipt =
     parsedReceiptType === "grocery" ||
@@ -1058,6 +1082,23 @@ export default function AddExpense() {
                 </select>
               </div>
             </div>
+            {fuelAveragePreview ? (
+              <div className="rounded-lg border border-(--fuel)/40 bg-(--fuel)/10 p-3 space-y-1">
+                <p className="text-xs font-bold text-(--fuel)">Fuel average (since last fill-up)</p>
+                <p className="text-sm font-black tabular-nums text-foreground">
+                  {fuelAveragePreview.kmSinceLast} km ÷ {fuel.volumeLiters} L ={" "}
+                  {fuelAveragePreview.kmPerLiter.toFixed(2)} km/L
+                </p>
+                <p className="text-[10px] text-(--text-muted)">
+                  Last odometer: {fuelAveragePreview.prevOdometer} km (
+                  {format(new Date(fuelAveragePreview.prevDate), "d MMM yyyy")})
+                </p>
+              </div>
+            ) : (isFuelCategory || isFuel) && fuel.odometerKm && (fuel.volumeLiters ?? 0) > 0 ? (
+              <p className="text-[10px] text-(--text-muted)">
+                Log odometer on your previous fill-up to calculate km/L (reserve to reserve).
+              </p>
+            ) : null}
           </div>
         )}
 
