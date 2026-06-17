@@ -1,10 +1,9 @@
-onlyBuiltDependencies:
-  - '@firebase/util'
-  - core-js
-  - core-js-pure
-  - ejs
-  - es5-ext
-  - esbuild
-  - fsevents
-  - protobufjs
-  - tesseract.js
+allowBuilds:
+  '@firebase/util': true
+  core-js: true
+  core-js-pure: true
+  ejs: true
+  es5-ext: true
+  esbuild: true
+  fsevents: true
+  protobufjs: true

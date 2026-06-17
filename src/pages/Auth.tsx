@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { XlviLoader } from "react-awesome-loaders";
+import { XlviLoader } from "../components/XlviLoader";
 import { useAuth } from "../context/AuthContext";
 
 type Mode = "signin" | "signup";

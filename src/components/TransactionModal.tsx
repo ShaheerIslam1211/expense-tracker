@@ -444,11 +444,16 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
     }
 
     if (isRecurring) {
+      const existing = editingTransaction?.recurring;
       transactionData.recurring = {
         isRecurring: true,
         frequency,
-        nextOccurrenceDate: new Date(date).toISOString(), // Start from selected date
+        nextOccurrenceDate: existing?.nextOccurrenceDate ?? new Date(date).toISOString(),
+        ...(existing?.lastProcessedDate ? { lastProcessedDate: existing.lastProcessedDate } : {}),
+        ...(existing?.endDate ? { endDate: existing.endDate } : {}),
       };
+    } else if (editingTransaction?.recurring?.isRecurring) {
+      transactionData.recurring = undefined;
     }
 
     transactionData.dadRecovery = type === "income" ? dadRecovery : false;
@@ -1272,6 +1277,15 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({ isOpen, onCl
                           {freq}
                         </button>
                       ))}
+                      {editingTransaction?.recurring?.nextOccurrenceDate ? (
+                        <p className="col-span-2 text-[10px] text-muted-foreground font-medium leading-relaxed">
+                          Next auto-entry:{" "}
+                          <span className="font-bold text-foreground">
+                            {format(parseISO(editingTransaction.recurring.nextOccurrenceDate), "EEE, d MMM yyyy")}
+                          </span>
+                          . Changing the amount updates future entries; the schedule stays the same.
+                        </p>
+                      ) : null}
                     </motion.div>
                   )}
                 </div>

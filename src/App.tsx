@@ -20,6 +20,7 @@ import Settings from "./pages/Settings";
 import CalendarPage from "./pages/Calendar";
 import AuthPage from "./pages/Auth";
 import Savings from "./pages/Savings";
+import Recurring from "./pages/Recurring";
 import { AppLoader } from "./components/AppLoader";
 
 interface RequireAuthProps {
@@ -118,6 +119,10 @@ function App() {
                               <Route
                                 path="savings"
                                 element={<Savings />}
+                              />
+                              <Route
+                                path="recurring"
+                                element={<Recurring />}
                               />
                             </Route>
                           </Routes>
